@@ -203,6 +203,13 @@ while (fiber) {
 | `vue-call-api.js` | **Vue**：读方法源码找到真正的 API 方法，绕过失效的 UI 校验直接调用 |
 | `react-fiber-click.js` | **React 16**：走 fiber 树拿到 `onClick`，点开隐藏按钮 + 处理 Ant Design 确认框 |
 | `resume-audit.js` | 多平台简历审计：批量检查编造数据、缺失内容、文本损坏 |
+| `add-project-51job.js` | **前程无忧**：批量添加项目经历（调组件 API，实测 8/8 成功） |
+| `add-project-zhaopin.js` | **智联**：批量添加/删除项目经历（含 4 个必踩的坑） |
+| `projects.sample.json` | 上面两个脚本的数据模板 |
+
+> 📘 **实战笔记**：[`docs/ADD-PROJECTS.md`](docs/ADD-PROJECTS.md) —— 记录了两个平台「批量填项目经历」的完整方法：
+> 选择器作用域、日期必须回车、组件里日期是 Date 对象、页面折叠导致验证误判、删除要传对象而不是索引。
+> **照着做不用重复探索。**
 
 `lib/client.js` 是共用基础模块：
 
@@ -255,6 +262,7 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 │   └── profile.example.json  模板
 ├── docs/
 │   ├── TUTORIAL.md         保姆级教程
+│   ├── ADD-PROJECTS.md     ★ 批量填项目经历的实战笔记（智联/前程无忧）
 │   └── architecture.svg
 ├── tools/
 │   └── gh-api-push.js      网络受限时用 REST API 推送（见下）
