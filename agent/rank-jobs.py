@@ -68,7 +68,8 @@ def main():
     src = sys.argv[1]
     dst = sys.argv[2] if len(sys.argv) > 2 else src.replace('.json', '-ranked.json')
 
-    jobs = json.load(open(src, encoding='utf-8'))
+    # utf-8-sig 同时兼容带 BOM / 不带 BOM 的文件（Windows 上用 PowerShell 生成 JSON 常常带 BOM）
+    jobs = json.load(open(src, encoding='utf-8-sig'))
     kept, dropped = [], []
 
     for job in jobs:
