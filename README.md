@@ -207,11 +207,13 @@ while (fiber) {
 | `add-project-zhaopin.js` | **智联**：批量添加/删除项目经历（含 4 个必踩的坑） |
 | `projects.sample.json` | 上面两个脚本的数据模板 |
 
-> 📘 **实战笔记**（三份，都是踩完坑之后的结论，照着做不用重复探索）：
+> 📘 **实战笔记**（四份，都是踩完坑之后的结论，照着做不用重复探索）：
 >
 > - [`docs/PLATFORMS.md`](docs/PLATFORMS.md) —— **四平台操作手册**：每个平台的简历页/附件/消息页入口、
->   Vue 组件 API 与 React fiber 的具体调法、投递与发附件简历的完整动作链、
->   期望城市的支持差异，以及反爬特性（BOSS 列表页薪资字体混淆、会话列表只留 40 条）。
+>   Vue 组件 API 与 React fiber 的具体调法、四个平台的投递动作链与成功判据、期望城市的支持差异，
+>   以及各平台的城市码（**东莞/中山/惠州这几个不能靠规律猜**）。
+> - [`docs/RISK-CONTROL.md`](docs/RISK-CONTROL.md) —— **反风控实战记录**：四平台风控强度对比、
+>   一次真实风控事件的完整复盘、判断信号表、以及为什么「失败的循环比成功的循环更危险」。
 > - [`docs/SCREENING.md`](docs/SCREENING.md) —— **岗位筛选与去重规则**：外包/驻场/人力公司黑名单、
 >   非开发岗与级别不符的排除、JD 层面驻场检测（含否定语境处理）、
 >   以及为什么**去重要看详情页按钮而不是会话列表**。
@@ -260,17 +262,22 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 │   ├── bridge.js           扩展连接管理
 │   ├── cmd.js              命令行客户端
 │   ├── lib/client.js       公共模块（推荐用这个写脚本）
+│   ├── lib/filters.js      岗位过滤公共规则（外包黑名单 / 驻场检测 / 薪资解析）
 │   ├── examples/           技法示例（见上）
 │   ├── scrape-jobs.js      岗位抓取（BOSS直聘）
 │   ├── apply-jobs.js       投递流水线（BOSS直聘，含按 JD 定制招呼语）
 │   ├── apply-jobs-zhaopin.js  投递流水线（智联招聘，一键投递 + 简历一起发）
+│   ├── apply-jobs-51job.js    投递流水线（前程无忧，同上）
+│   ├── apply-jobs-liepin.js   投递流水线（猎聘，⚠️ 风控高，需节制）
+│   ├── check-replies.js    ★ 查各平台 HR 回复 / 主动来消息
 │   └── rank-jobs.py        岗位过滤 + 匹配度打分
 ├── resume/             简历生成（个人信息放在 gitignore 的 profile.json）
 │   ├── build_resume.py     从 profile.json 生成 Word 简历
 │   └── profile.example.json  模板
 ├── docs/
 │   ├── TUTORIAL.md         保姆级教程
-│   ├── PLATFORMS.md        ★ 四平台操作手册（入口 / 组件 API / 发附件简历 / 反爬）
+│   ├── PLATFORMS.md        ★ 四平台操作手册（入口 / 组件 API / 投递 / 城市码）
+│   ├── RISK-CONTROL.md     ★ 反风控实战记录（含一次完整的风控复盘）
 │   ├── SCREENING.md        ★ 岗位筛选与去重规则（外包黑名单 / 去重判据）
 │   ├── ADD-PROJECTS.md     ★ 批量填项目经历的实战笔记（智联/前程无忧）
 │   └── architecture.svg
