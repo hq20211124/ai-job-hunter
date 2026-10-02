@@ -9,7 +9,9 @@
 const http = require('http');
 
 const HOST = process.env.NAVAGENT_HOST || '127.0.0.1';
-const PORT = Number(process.env.NAVAGENT_PORT || 61823);
+// 注意：这里是【HTTP 命令端口】(默认 61823)，与扩展连接的【WebSocket 端口】(默认 61822) 不是同一个。
+// WebSocket 端口由扩展的选项页 / 代理的 NAVAGENT_PORT 决定。
+const PORT = Number(process.env.NAVAGENT_HTTP_PORT || 61823);
 
 /** 发一条命令给本地代理 */
 function call(command, params = {}, timeout = 120000) {
@@ -55,7 +57,20 @@ const query = (selector, limit = 60) => call('query', { selector, limit }).then(
 const clickSel = (selector, nth = 1) => call('clickSel', { selector, nth });
 const typeSel = (selector, text, opts = {}) =>
   call('typeSel', Object.assign({ selector, text, submit: false, fast: true }, opts));
-const scroll = (direction = 'down', times = 1) => call('scroll', { direction, times });
+
+/**
+ * 滚动页面（用于触发懒加载 / 无限滚动）
+ * 注意：扩展侧的 scroll 一次只滚一屏（约 0.8 × 视口高度），
+ *      这里按 times 循环调用，每次之间留出加载时间。
+ */
+async function scroll(direction = 'down', times = 1) {
+  let last = null;
+  for (let i = 0; i < times; i++) {
+    last = await call('scroll', { direction });
+    if (i < times - 1) await nap(1000, 1800);
+  }
+  return last;
+}
 
 /** 人类节奏延时 */
 const nap = (a = 2000, b = 3500) => new Promise((r) => setTimeout(r, a + Math.random() * (b - a)));
