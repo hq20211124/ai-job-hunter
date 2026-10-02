@@ -687,9 +687,39 @@ https://www.liepin.com/zhaopin/?key=<关键词>&dqs=<城市码>
 搜索页   https://www.liepin.com/zhaopin/?key=<词>&dqs=<码>
 卡片     .jobCardPcContainer      每页 40 条
          ★ 卡片里有 <a href="https://www.liepin.com/job/<jobId>.shtml">，jobId 可直接用于去重
-详情页   a.btn-minor「投简历」 → 弹窗「选择附件简历」→ 「立即投递」
+详情页   a.btn-minor「投简历」 → 弹窗「选择附件简历」→ button.ant-c-btn-primary「立即投递」
          a.btn-main 「聊一聊」（走 IM，自动化下不挂载，不要用）
 ```
+
+**⚠️⚠️ 最大的坑：弹窗里的「立即投递」必须点 `<button>`，不能点外层 DIV**
+
+弹窗里有**三个**元素的文字都是「立即投递」：
+
+```html
+<div class="ant-c-modal-footer">          <!-- ① 外层容器 -->
+  <button class="ant-c-btn ant-c-btn-round ant-c-btn-primary">   <!-- ② 真正的按钮 ✅ -->
+    <span>立即投递</span>                  <!-- ③ 内层文字 -->
+  </button>
+</div>
+```
+
+按文档顺序取第一个匹配（`querySelectorAll('button,a,span,div')`）会取到 **① 的 DIV**，
+点了等于没点 —— 页面毫无反应，而且**不会报错**，脚本会误以为投递成功。
+
+```js
+// ❌ 会点到外层 DIV
+Array.from(document.querySelectorAll('button,a,span,div')).find(e => e.innerText.trim()==='立即投递')
+
+// ✅ 直接按类名取真正的按钮
+document.querySelector('button.ant-c-btn-primary')
+```
+
+**投递成功的判据（两个都要看）**：
+
+1. **弹窗消失** —— 如果「选择附件简历」的弹窗还在，就是没投出去
+2. **页面出现「投递成功」** —— 而且会跟一句「以下职位与您投递的职位非常相似，是否一起发送简历？」
+
+只看到「点击成功」不算数。**这个坑让前 4 次投递全部静默失败**（岗位详情页的按钮一直还是「投简历」）。
 
 **⚠️ 不是所有岗位都有「投简历」按钮**
 
