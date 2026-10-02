@@ -432,7 +432,96 @@ button.im-send-resume-nav__chip                 「发简历」
 
 **结论：过期会话放弃，不要反复重试。**
 
-### 3.4 项目经历
+### 3.4 投递岗位：一键投递（比 BOSS 简单很多）⭐
+
+**搜索页 URL**：
+
+```
+https://www.zhaopin.com/jobs?jl=<城市码>&kw=<关键词>
+```
+
+**智联城市码（实测，广东全省）**：
+
+| 城市 | 码 | 城市 | 码 | 城市 | 码 |
+|---|---|---|---|---|---|
+| 广州 | 763 | 深圳 | 765 | 东莞 | **779** |
+| 佛山 | 768 | 中山 | **780** | 珠海 | 766 |
+| 惠州 | **773** | 汕头 | 767 | 江门 | 769 |
+| 湛江 | 770 | 茂名 | 771 | 肇庆 | 772 |
+| 韶关 | 764 | 梅州 | 774 | 汕尾 | 775 |
+| 河源 | 776 | 阳江 | 777 | 清远 | 778 |
+| 潮州 | 781 | 揭阳 | 782 | 云浮 | 783 |
+
+> 注意：东莞 779 / 中山 780 / 惠州 773 这三个**不在 763-772 的连续区间里**，
+> 靠猜会猜错（763 是广州，530 是北京）。改城市码前先用页面标题核对一次。
+
+**页面结构：左边列表 + 右边详情**
+
+```html
+<div class="job-split-layout">
+  <div class="job-split-layout__left">
+    <div class="job-list-panel">
+      <div class="job-card">…</div>   <!-- 每页 20 条 -->
+```
+
+```js
+// 列表项
+document.querySelectorAll('.job-list-panel .job-card')            // 20 个
+
+// 点第 n 张卡片 → 右侧详情面板更新
+pe(`(function(){ const c = document.querySelectorAll('.job-list-panel .job-card')[n-1];
+     c.scrollIntoView({block:'center'}); c.click(); })()`)
+
+// 详情面板
+document.querySelector('.job-split-layout__right')
+```
+
+**投递按钮**
+
+| 按钮 | 类名 | 作用 |
+|---|---|---|
+| 立即投递 | `button.job-detail-summary__apply` | **一键完成：发简历 + 发招呼语** |
+| 先聊聊 | `button.job-detail-summary__prechat` | 只打开聊天，不发简历 |
+
+**⚠️ 点「立即投递」不需要二次确认** —— 点下去就直接发出去了。
+之后弹出的 `deliver-greeting-modal` **只是成功提示**（内容形如「已向对方发送简历和打招呼语：…」），
+点「留在此页」关掉即可。
+
+> 💡 **这就是判断是否投递成功的依据**：读
+> `.deliver-greeting-modal__content` 的文本，非空 = 投递成功，同时这也就是实际发出去的招呼语。
+
+**好消息：智联投递会连简历一起发**（消息列表里显示「已发送附件简历」），
+比 BOSS 只发招呼语更有效。
+
+#### 自定义招呼语（改一次，之后每次投递都用它）
+
+地址：`https://i.zhaopin.com/im/greeting/setting` → 切到「**招呼语**」标签。
+
+页面有 5 个分类：`自定义` / `常规` / `幽默` / `礼貌` / `诚恳`。
+**「自定义」是自己加的，「常规」是平台预设** —— 加完要记得切到「自定义」才看得到。
+
+```js
+// 1. 点「添加招呼语」
+// 2. 弹窗里的 textarea（.ivu-input）写入话术，点「保存」
+await typeSel('textarea', text, { nth: 1, fast: true });
+// 点 phrase-modal__btn--ok（保存）
+
+// 3. 切到「自定义」标签，点该条目的「设为默认」
+//    选中后图标会变成 radio-active-icon（可以据此确认）
+```
+
+**注意**：默认显示的是「常规」标签，加完话术在「常规」里看不到，容易误以为保存失败。
+
+**配套脚本**：`agent/apply-jobs-zhaopin.js`
+
+```bash
+node agent/apply-jobs-zhaopin.js <城市码> <关键词> <数量> [--dry]
+node agent/apply-jobs-zhaopin.js 763 Java 10        # 广州 Java 投 10 个
+```
+
+脚本会自动跳过：非开发岗（初级/测试/运维等）/ 外包公司名 / **JD 含「驻场」** / 投过的（按「标题@@公司」去重）。
+
+### 3.5 项目经历
 
 见 [`ADD-PROJECTS.md`](ADD-PROJECTS.md) 第二节（含必踩的 4 个坑）。
 
