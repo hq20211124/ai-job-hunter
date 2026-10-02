@@ -207,11 +207,14 @@ while (fiber) {
 | `add-project-zhaopin.js` | **智联**：批量添加/删除项目经历（含 4 个必踩的坑） |
 | `projects.sample.json` | 上面两个脚本的数据模板 |
 
-> 📘 **实战笔记**（两份，都是踩完坑之后的结论，照着做不用重复探索）：
+> 📘 **实战笔记**（三份，都是踩完坑之后的结论，照着做不用重复探索）：
 >
 > - [`docs/PLATFORMS.md`](docs/PLATFORMS.md) —— **四平台操作手册**：每个平台的简历页/附件/消息页入口、
 >   Vue 组件 API 与 React fiber 的具体调法、投递与发附件简历的完整动作链、
->   以及反爬特性（BOSS 列表页薪资字体混淆、会话列表只留 40 条、去重要看详情页按钮）。
+>   期望城市的支持差异，以及反爬特性（BOSS 列表页薪资字体混淆、会话列表只留 40 条）。
+> - [`docs/SCREENING.md`](docs/SCREENING.md) —— **岗位筛选与去重规则**：外包/驻场/人力公司黑名单、
+>   非开发岗与级别不符的排除、JD 层面驻场检测（含否定语境处理）、
+>   以及为什么**去重要看详情页按钮而不是会话列表**。
 > - [`docs/ADD-PROJECTS.md`](docs/ADD-PROJECTS.md) —— 「批量填项目经历」专题：选择器作用域、日期必须回车、
 >   组件里日期是 Date 对象、页面折叠导致验证误判、删除要传对象而不是索引。
 
@@ -267,6 +270,7 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 ├── docs/
 │   ├── TUTORIAL.md         保姆级教程
 │   ├── PLATFORMS.md        ★ 四平台操作手册（入口 / 组件 API / 发附件简历 / 反爬）
+│   ├── SCREENING.md        ★ 岗位筛选与去重规则（外包黑名单 / 去重判据）
 │   ├── ADD-PROJECTS.md     ★ 批量填项目经历的实战笔记（智联/前程无忧）
 │   └── architecture.svg
 ├── tools/
