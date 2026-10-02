@@ -203,7 +203,84 @@ await clickSel('.friend-content .text', nth);
 **标签页**：`全部` / `未读` / `新招呼` / `仅沟通`。
 **别只看「全部」** —— 新消息的会话可能排在虚拟列表里没渲染出来，要看「未读」。
 
-### 2.5 检查 HR 回复：**必须先点「未读」标签** ⚠️ 最容易漏
+### 2.5 找历史会话：列表上限 100 条 + 虚拟滚动 + 搜索框
+
+#### ⚠️ 会话列表是**虚拟列表**，DOM 里只有 40 条，实际最多 100 条
+
+```html
+<div class="user-list-content">
+  <ul role="group" style="padding: 0px 0px 4680px;">   <!-- 大块 padding = 未渲染的条目占位 -->
+    <li>…</li> ×40                                       <!-- 只渲染 40 个 -->
+```
+
+`padding-bottom` 越大，说明没渲染的条目越多。**直接设 `scrollTop` 不会触发重渲染**，
+必须补一个 `scroll` 事件：
+
+```js
+// ✅ 这样滚才有效（每次 500px，循环到 scrollTop 触底）
+await pe(`(function(){
+  const box = document.querySelector('.user-list-content');
+  box.scrollTop = box.scrollTop + 500;
+  box.dispatchEvent(new Event('scroll', { bubbles: true }));   // ← 关键
+  return box.scrollTop;
+})()`);
+await nap(2000, 3000);
+// 每滚一轮就把当前渲染出来的条目收集进 Set 去重，滚到底就能凑齐全部
+```
+
+❌ 无效的做法：`box.scrollTo(...)`、`dispatchEvent(new WheelEvent(...))` —— `scrollTop` 会变，但列表不重渲染。
+
+#### 会话列表最多只有 100 条，更早的会被挤出去
+
+实测：批量投递当天，列表里的 100 条**全是当天下午的**，更早的对话（哪怕只隔了 9 天）都不在列表里。
+
+**要找旧会话，用页面顶部的会话搜索框**（`.boss-search-input`）——
+但**搜索结果渲染在另一个容器里**，不是 `.friend-content`：
+
+```js
+// 输入关键词
+await typeSel('.boss-search-input', '某某公司', { submit: false, fast: true });
+await nap(2500, 3500);
+
+// ✅ 结果在这里（.friend-content 里是空的，别找错地方）
+const results = JSON.parse(await pe(`JSON.stringify(
+  Array.from(document.querySelectorAll('.search-list'))
+    .map((e,i)=>({ i:i+1, txt:(e.innerText||'').trim().replace(/\\s+/g,' ') })))`));
+// → [{ i:1, txt:'张女士 某某公司 HR 职位: java开发工程师' }, …]
+
+// 点第 i 条打开会话
+await pe(`(function(){
+  const els = Array.from(document.querySelectorAll('.search-list')).filter(e => (e.innerText||'').trim());
+  els[${i} - 1].click();
+})()`);
+```
+
+> 搜索框的 placeholder 是「搜索30天内的联系人」，所以**只能找到 30 天内的**。
+> 同名联系人可能有多条（如「华苏科技」有 4 个人），要用姓名精确挑。
+
+#### ⚠️ 判断「会话是否真的打开了」，别用 `read` 命令的文本
+
+这是个踩过的坑：用 `read` 的输出里有没有「按Enter键发送」来判断，**会误判**——
+明明会话已经打开（DOM 里就有那句话），`read` 却没带上，导致整批发送被跳过。
+
+**正确做法：直接读 `.chat-conversation` 的 DOM。**
+
+```js
+const st = JSON.parse(await pe(`JSON.stringify((function(){
+  const e = document.querySelector('.chat-conversation');
+  return {
+    head: e ? (e.innerText||'').replace(/\\s+/g,' ').slice(0,100) : '',
+    hasInput: !!document.querySelector('.chat-input'),
+    alreadyReplied: e ? /感谢联系/.test(e.innerText||'') : false   // 幂等：已回过就跳过
+  };
+})())`));
+// 用 head.length > 30 && hasInput 判定会话已打开
+```
+
+**发送成功的唯一判据仍然是 `.chat-input` 已清空**，而且发送前先读一次输入框回显，
+确认文字真的进去了（回显 < 10 字就别发，否则会把空消息或残留内容发出去）。
+
+### 2.6 检查 HR 回复：**必须先点「未读」标签** ⚠️ 最容易漏
 
 BOSS 消息页有四个标签：`全部` / `未读` / `新招呼` / `仅沟通`。
 
@@ -240,7 +317,7 @@ const OUR = /\[送达\]|\[已读\]|您(加密的)?附件简历|您正在与Boss/
 const replies = convs.filter(c => !OUR.test(c.txt));   // 最后一条不是我们发的
 ```
 
-### 2.6 附件简历请求卡片（容易重复发送）⚠️
+### 2.7 附件简历请求卡片（容易重复发送）⚠️
 
 HR 发起「我想要一份您的附件简历，您是否同意」时，会话里会出现一张卡片：
 
@@ -279,7 +356,7 @@ await clickSel('.card-btn', idx);       // 用全局下标点，精确命中
 如果你在循环里"点第一个同意"，就会**连发 N 次附件简历**。
 **规矩：一次只点一下 → 读状态确认 → 再决定下一步。**
 
-### 2.7 点「立即沟通」会自动发一条默认招呼语
+### 2.8 点「立即沟通」会自动发一条默认招呼语
 
 BOSS 在你点「立即沟通」时会**自动替你把默认招呼语发出去**（内容形如「你好，关注贵公司很久了，XX还有空缺么？」）。
 
@@ -287,7 +364,7 @@ BOSS 在你点「立即沟通」时会**自动替你把默认招呼语发出去*
 - 你自己定制的话术即使发送失败，这次接触**也不算白费**；
 - 但如果你随后又发定制话术，HR 会看到**两条**消息。
 
-### 2.8 猎头索要联系方式
+### 2.9 猎头索要联系方式
 
 会话里会出现「我想要和您交换联系方式，您是否同意」。同意后**对方手机号会直接显示在会话里**（卡片变成「XX的手机号 138xxxxxxxx」+「复制手机号」按钮）。
 
@@ -654,6 +731,10 @@ if (v.formData) v.formData.interestLocationList = picked;
 | 点击导致跳转后 `pageEval` 超时 | 内容脚本还没注入 | 等 5-7 秒再执行 |
 | 会话列表序号对不上 | `[class*="friend-content"]` 命中了 warp | 用精确的 `.friend-content` |
 | **看不到 HR 的回复** | 只看了「全部」标签（只留最近 40 条） | **先点「未读」**，抓到就立刻落盘（点一次就变已读） |
+| **找不到几天前的会话** | 会话列表最多 100 条，更早的被挤出去了 | 用 `.boss-search-input` 搜索；**结果在 `.search-list` 里，不是 `.friend-content`** |
+| 滚不动会话列表 | 虚拟列表，直接改 `scrollTop` 不触发重渲染 | 改完 `scrollTop` 再 `dispatchEvent(new Event('scroll'))` |
+| **误判「会话没打开」** | 用 `read` 命令的文本判断 | 直接读 `.chat-conversation` 的 DOM（`head.length > 30 && hasInput`） |
+| 发了空消息 | 没确认输入框内容就点发送 | 发送前先读 `.chat-input` 回显，< 10 字就别发 |
 | 城市多选面板点不动 | `.select-section` 计数停在 `0/9` | 直接写组件的 `interestLocationList` / `interestLocationCode` |
 | 工具栏「换电话/换微信」点不开 | 是悬停弹层 `.sentence-popover` | 弹层在 DOM 里但 `display:none`；微信那条**没有**对应弹层，只能人工 |
 | 求职意向保存报"请选择…" | 校验没通过 | 点「完成」= `submitSave()` → 走 `validate()`，字段必须真的写进组件数据 |
