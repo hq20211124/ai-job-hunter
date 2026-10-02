@@ -147,14 +147,18 @@
       if (el.shadowRoot) { _sh++; for (const c of el.shadowRoot.children) walk(c, inside || clickable); }
     }
 
-    for (const c of document.body.children) walk(c, false);
-    if (document.body.shadowRoot) for (const c of document.body.shadowRoot.children) walk(c, false);
+    // 裸 SVG / XML 文档没有 body，直接以 documentElement 作为根（否则这里会抛异常）
+    const scanRoot = document.body || document.documentElement;
+    if (!scanRoot) return { ok: false, error: '文档没有可扫描的根节点' };
+
+    for (const c of scanRoot.children) walk(c, false);
+    if (scanRoot.shadowRoot) for (const c of scanRoot.shadowRoot.children) walk(c, false);
 
     // Force-scan shadow roots for overlay/modal content (e.g. LinkedIn #interop-outlet)
     // These hosts often have height:0 and their children may also fail isVisible()
     // because they inherit layout from the invisible host. We directly query for
     // clickable elements inside and add them to the registry.
-    document.body.querySelectorAll('*').forEach(host => {
+    scanRoot.querySelectorAll('*').forEach(host => {
       if (!host.shadowRoot || host.shadowRoot.children.length === 0) return;
       const sr = host.shadowRoot;
       sr.querySelectorAll('button, a, input, textarea, select, [role="button"], [role="link"], [role="switch"], [role="textbox"], [contenteditable="true"], [tabindex]').forEach(el => {
