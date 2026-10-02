@@ -1,0 +1,73 @@
+{
+  "_说明": "复制本文件为 profile.json 并填入自己的信息。profile.json 已被 .gitignore 排除，不会上传。",
+  "_字段说明": {
+    "output": "生成的 Word 文件路径，可被命令行 -o 覆盖",
+    "experience[].projects[].tech": "可选，技术方案行（灰字小号）",
+    "experience[].projects[].highlight": "可选，红色强调行（写业绩用）"
+  },
+
+  "output": "./resume.docx",
+
+  "name": "张三",
+  "headline": "高级 Java 开发工程师　·　7 年工作经验　·　期望城市：广州　·　一周内到岗",
+  "contact": "男 / 30 岁　|　13800000000　|　you@example.com",
+
+  "summary": {
+    "intro": "一句话开场，说明你的核心定位。",
+    "bullets": [
+      "第一条优势，最好带具体场景和结果；",
+      "第二条优势；",
+      "第三条优势。"
+    ]
+  },
+
+  "skills": [
+    { "prefix": "语言 / 框架：", "text": "Java（JDK 8 / 11 / 17）、Spring Boot、Spring Cloud、MyBatis-Plus" },
+    { "prefix": "数据库 / 缓存：", "text": "MySQL、Redis、Elasticsearch" },
+    { "prefix": "消息队列：", "text": "RocketMQ、Kafka" },
+    { "prefix": "架构能力：", "text": "微服务架构、DDD、老系统重构、性能优化" }
+  ],
+
+  "experience": [
+    {
+      "company": "某某科技有限公司",
+      "title": "Java 开发工程师",
+      "period": "2024.02 - 至今",
+      "bullets": [
+        "工作职责第一条，写清楚你负责什么、影响范围多大。",
+        "工作职责第二条。"
+      ],
+      "projects": [
+        {
+          "name": "项目一：某某平台　后端开发",
+          "tech": "linux + git + maven + jdk17 + mysql + redis + Spring Boot3.0 + Spring Cloud + Nacos",
+          "bullets": [
+            "项目背景与你的角色。",
+            "你具体做了什么。"
+          ],
+          "highlight": "业绩：写明可量化的结果。"
+        },
+        {
+          "name": "项目二：某某系统　后端开发",
+          "bullets": [
+            "没有技术方案行时可以直接写要点。"
+          ]
+        }
+      ]
+    },
+    {
+      "company": "某某信息技术有限公司",
+      "title": "Java 开发工程师",
+      "period": "2020.01 - 2024.01",
+      "bullets": [
+        "上一份工作的职责。"
+      ],
+      "projects": []
+    }
+  ],
+
+  "education": {
+    "school": "某某大学",
+    "line": "计算机科学与技术　|　本科　|　2015.09 - 2019.06　|　在校学习 Java、SQL 等"
+  }
+}
