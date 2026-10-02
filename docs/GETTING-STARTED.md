@@ -152,11 +152,16 @@ python resume/build_resume.py resume/profile.json -o resume/我的简历.docx
 ```bash
 cd agent
 
-# ① 抓岗位（先改脚本里的 CITIES 和 KEYWORDS 成你的城市和方向）
-node scrape-jobs.js
+# ① 抓岗位（城市和关键词都用参数传，不用改脚本）
+node scrape-jobs.js --cities 广州,深圳,东莞 --keywords Java,后端开发
+node scrape-jobs.js --cities all-guangdong            # 广东全省 21 市
+node scrape-jobs.js --help
 #    → data/gd-jobs.json
 
-# ② 过滤 + 打分 + 排序（用 --help 看参数）
+#    ⚠️ 换了新城市码先核对一下（城市码不能靠规律猜）
+#    node scrape-jobs.js --verify --cities 广州,汕尾
+
+# ② 过滤 + 打分 + 排序
 python rank-jobs.py data/gd-jobs.json
 #    → data/jobs-ranked.json
 
@@ -269,7 +274,7 @@ node check-replies.js boss     # 只查 BOSS
 - [ ] 简历生成并**上传到四个平台的附件**
 - [ ] 四个平台的**在线简历**填好
 - [ ] 智联的自定义招呼语设好
-- [ ] `agent/scrape-jobs.js` 里的 `CITIES` / `KEYWORDS` 改成你的
+- [ ] `agent/scrape-jobs.js` 的城市/关键词按你的情况传参（不用改脚本）
 - [ ] `agent/filters.json` 里的外包黑名单按你的情况调整
 
 **每天都做：**
