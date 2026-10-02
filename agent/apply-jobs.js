@@ -50,6 +50,20 @@ const nap = (a = 2000, b = 3500) => new Promise(r => setTimeout(r, a + Math.rand
 const txt = r => String(r?.result?.result ?? '');
 const logline = (s) => { console.log(s); fs.appendFileSync(LOG, s + '\n', 'utf8'); };
 
+/** 外包 / 驻场 / 派遣 公司名兜底（队列是离线筛的，这里再挡一道） */
+const OUTSOURCE_COMPANY = /人力|人才|劳务|外服|派遣|外包|企业管理|万宝盛华|人瑞|人惠|中智|仁联|科锐|高凡|拓保|博才|易才|朗钧|外企德科|FESCO|佰钧成|中科铭天|腾信软创|网新|赛意|华立数字|中软国际|软通动力|中电金信|文思海辉|博彦|法本|同海科技|同方鼎欣|中科软|贸易商行|商行/i;
+
+/**
+ * JD 层面的驻场/外包检测。
+ * 注意要排除否定语境：港融科技的 JD 写的是「自研非外包」，那是好事，不能误杀。
+ */
+function outsourceSignal(jdText) {
+  const NEG = /(无需|不需要|不用|非|不)驻场|自研非外包|非外包|无外包|不是外包|不涉及外包/;
+  const hits = [];
+  if (/驻场/.test(jdText) && !NEG.test(jdText)) hits.push('驻场');
+  return hits;
+}
+
 /** 解析详情页薪资文本，返回 {min,max,raw}（单位：元/月） */
 function parseSalary(raw) {
   const s = String(raw || '').replace(/\s+/g, '');
@@ -198,6 +212,21 @@ async function openConversation(keywords) {
     const jdFile = path.join(JDDIR, `${idx}-${(job.company || '').replace(/[\\/:*?"<>|]/g, '_')}.txt`);
     fs.writeFileSync(jdFile, `职位: ${job.title}\n公司: ${job.company}\n地点: ${job.location}\n薪资: ${salary ? salary.raw : '?'}\nURL: ${job.url}\n\n${jd}`, 'utf8');
     logline(`  JD ${jd.length} 字符 → ${path.basename(jdFile)}`);
+
+    // ③.5 公司名兜底（队列是离线筛的，可能有不一致）
+    if (OUTSOURCE_COMPANY.test(job.company || '')) {
+      logline(`  ⏭️  公司名命中外包/人力黑名单：${job.company}，跳过`);
+      skipped++; newRecords.push({ ...job, ok: false, why: '公司名命中外包黑名单', salary: salary?.raw, ts: Date.now() });
+      continue;
+    }
+
+    // ③.6 JD 里出现「驻场」就跳过（用户底线：不接受外包/驻场）
+    const sig = outsourceSignal(jdText);
+    if (sig.length) {
+      logline(`  ⏭️  JD 命中外包/驻场信号：${sig.join('、')}，跳过`);
+      skipped++; newRecords.push({ ...job, ok: false, why: `JD含${sig.join('/')}`, salary: salary?.raw, ts: Date.now() });
+      continue;
+    }
 
     // ④ 是否已投过（按钮变成「继续沟通」）
     let btnText = '';
