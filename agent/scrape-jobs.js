@@ -1,9 +1,10 @@
-/**
+﻿/**
  * 广东全省岗位抓取 —— BOSS直聘
  * 逐城市搜索，每城人类节奏滚动，提取后解析
  */
 const http = require('http');
 const fs = require('fs');
+const path = require('path');
 function call(command, params = {}, timeout = 150000) {
   return new Promise((resolve) => {
     const body = JSON.stringify({ command, params, timeout });
@@ -21,7 +22,7 @@ function call(command, params = {}, timeout = 150000) {
 }
 const nap = (a = 1500, b = 3000) => new Promise(r => setTimeout(r, a + Math.random() * (b - a)));
 const txt = r => String(r?.result?.result ?? '');
-const OUT = 'C:\\D\\agent\\find-job';
+const OUT = path.resolve(__dirname, '..');   // 跟着项目走，不写死绝对路径
 
 // BOSS直聘城市代码
 const CITIES = [
