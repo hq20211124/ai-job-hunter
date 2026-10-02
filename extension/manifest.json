@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "NavAgent",
+  "version": "0.1.0",
+  "description": "MCP browser navigation bridge. Pair with navagent-mcp (npm) to let your AI assistant control your browser.",
+  "author": "dimitri.bouriez.dev@gmail.com",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "permissions": ["activeTab", "alarms", "storage"],
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["shadow-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["lib.js", "content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+# AI 求职自动化 —— 浏览器扩展方案
+
+用 AI 代替人操作招聘网站：看职位、读 JD、投简历、和 HR 聊天。
+
+**核心思路：不启动新浏览器、不用 CDP、不复制用户配置，而是装一个浏览器扩展，在你**真实登录的 Chrome** 里干活。**
+
+---
+
+## 为什么不用 Playwright / Selenium / CDP
+
+| 方案 | 问题 |
+|---|---|
+| Playwright 新建浏览器 | 需要重新登录（扫码），且是新设备指纹 |
+| CDP 连接用户 Chrome | Chrome 154+ 拒绝在默认配置目录上开调试端口 |
+| 复制配置目录 | 触发 App-Bound Encryption，**Cookie 被清空**（实测 848 → 35） |
+| 目录联结（junction） | 同样触发 ABE（实测 848 → 45），且原配置有损坏风险 |
+
+**扩展方案的优势**：跑在用户真实浏览器里，共享真实 Cookie、真实指纹、真实登录态。网站看到的就是「用户本人在用浏览器」。
+
+---
+
+## 架构
+
+```
+┌─────────────────┐   chrome.tabs.sendMessage   ┌──────────────────┐
+│  浏览器扩展      │ ◄──────────────────────────► │  内容脚本         │
+│  background.js   │                              │  content-script  │
+│  (service worker)│                              │  (ISOLATED 世界)  │
+└────────┬─────────┘                              └────────┬─────────┘
+         │                                                 │ postMessage
+         │ WebSocket (扩展是客户端)                          ▼
+         │                                        ┌──────────────────┐
+┌────────▼─────────┐                              │  MAIN 世界脚本    │
+│  本地代理         │                              │  shadow-hook.js  │
+│  agent.js         │                              │  (可访问页面 JS)   │
+│  ws://:61822      │                              └──────────────────┘
+│  http://:61823    │ ◄── 你的脚本 / AI 通过 HTTP 下命令
+└───────────────────┘
+```
+
+**为什么要有 MAIN 世界脚本**：内容脚本运行在隔离世界，拿不到页面的 Vue / React 实例。有些网站的关键控件只认真实鼠标事件（合成事件无效），这时必须走页面上下文。
+
+---
+
+## 快速开始
+
+### 1. 装扩展
+
+```
+Chrome → chrome://extensions → 打开「开发者模式」→「加载已解压的扩展程序」→ 选 extension/ 目录
+```
+
+### 2. 起代理
+
+```bash
+cd agent
+npm install ws     # 或 pnpm add ws
+node agent.js
+```
+
+看到 `✅ 扩展已就绪` 即成功。
+
+### 3. 下命令
+
+```bash
+node cmd.js goto "https://www.zhipin.com/web/geek/jobs?query=Java&city=101280100"
+node cmd.js read
+node cmd.js extract
+node cmd.js screenshot
+```
+
+---
+
+## 命令参考
+
+| 命令 | 说明 |
+|---|---|
+| `goto <url>` | 打开页面 |
+| `read` | 读页面纯文本 |
+| `extract` | 读页面结构化 markdown（**带链接地址**） |
+| `scan` | 列出可交互元素及编号 |
+| `query {selector,limit}` | 按 CSS 选择器查元素（含位置、可见性） |
+| `clickSel {selector,nth}` | 点元素 |
+| `typeSel {selector,nth,text,submit,fast}` | 输入文字；`fast:true` 用于长文本 |
+| `pageEval {code}` | **在页面主世界执行 JS** |
+| `screenshot` | 截图存到 `shots/` |
+
+---
+
+## 核心技术：绕过「合成点击无效」的控件
+
+**症状**：`el.click()` 和完整的事件序列都发出去了，页面毫无反应。
+
+**根因**：网站用框架（Vue / React）管理状态，只认真实用户交互；有些控件的显隐靠 CSS `:hover`，合成的 hover 事件触发不了。
+
+**解决方案（四级递进）**：
+
+### 第 1 级：强制显示 + 完整事件序列
+
+```js
+// content-script.js — forceVisible()
+// ⚠️ 关键坑：设成 '' 只是清空内联样式，会回退到 CSS 的 display:none，等于没改
+node.style.setProperty('display', 'block', 'important');   // ✅ 必须显式覆盖
+node.style.setProperty('visibility', 'visible', 'important');
+node.style.setProperty('pointer-events', 'auto', 'important');
+```
+
+### 第 2 级：点对元素
+
+包装元素（`<div class="btn-box">`）常常没有事件处理器，真正带事件的是内层 `<button>` 或 `<a>`。
+
+```js
+// ❌ 按文档顺序第一个匹配的是外层 DIV
+querySelectorAll('button, a, span, div')[0]
+// ✅ 指定标签
+querySelectorAll('button')[0]
+```
+
+### 第 3 级：Vue —— 直接调组件方法
+
+```js
+// 1. 找元素上挂的 Vue 实例
+let n = document.querySelector('.target'), d = 0, vue = null;
+while (n && d < 15) { if (n.__vue__) { vue = n.__vue__; break; } n = n.parentElement; d++; }
+
+// 2. 读方法源码，找真正调 API 的那个（关键！）
+vue.$options.methods.handleSave.toString()
+// → function(e){ this.$refs[e].validate(ok => ok && this.saveSelfInfo()) }
+//   ↑ handleSave 只是校验包装，saveSelfInfo 才调 API
+
+// 3. 直接调用业务方法
+vue.advantageForm.desc = '新内容';
+vue.saveSelfInfo();     // 绕过 UI 校验，直达 API
+```
+
+### 第 4 级：React —— 走 fiber 树拿事件处理器
+
+```js
+// React 16/17：元素上是 __reactInternalInstance$xxx（不是 __reactProps$）
+const key = Object.keys(el).find(k => k.startsWith('__reactInternalInstance'));
+let fiber = el[key];
+while (fiber) {
+  const props = fiber.memoizedProps || fiber.pendingProps;
+  if (typeof props.onClick === 'function') {
+    props.onClick({ preventDefault(){}, stopPropagation(){}, ... });
+    break;
+  }
+  fiber = fiber.return;   // 沿 fiber 树向上
+}
+```
+
+**实例**：猎聘的工作经历删除按钮是 `display:none`（悬停显示），React 16 实现。用上面的方法拿到 `onClick` 并调用，弹出确认框，再点 `.ant-modal-confirm-btns .ant-btn-primary` 完成删除。
+
+---
+
+## 踩过的坑（血泪清单）
+
+| 坑 | 现象 | 解法 |
+|---|---|---|
+| **字段字数上限** | 写入成功但保存无效 | 先读「还可输入 N 个字」提示。智联个人优势上限 **500 字** |
+| **日期必须回车确认** | 显示有值但校验报「请选择时间」 | `typeSel` 加 `submit: true` |
+| **`display:''` 无效** | 强制显示后元素仍无布局盒子 | 用 `setProperty(..., 'important')` |
+| **Ant Design 按钮文字带空格** | 正则 `^确定$` 匹配不到「确 定」 | 用类名 `.ant-btn-primary`，别用文字 |
+| **`pageEval` 返回对象** | 拿到 `[object Object]`，误写入简历 | 页面内先 `JSON.stringify`；**写回前务必核对** |
+| **`pageEval` 只收表达式** | `Unexpected token ';'` | 代码包成 IIFE：`(function(){ ... })()` |
+| **会话列表虚拟滚动** | 扫不到目标会话 | 用「未读」标签 + 搜索框，别只依赖列表 |
+| **扩展改了不生效** | 新命令报 `Unknown` | Chrome 不会热重载扩展，**必须手动点重载** |
+
+---
+
+## 反风控经验
+
+- **不要依赖程序批量投递 Boss**：BOSS直聘 是唯一有主动反自动化机制的平台。当天触发风控就停，第二天再投。
+- **人类节奏**：每个动作间隔 2-5 秒，批次之间 15-25 秒，别连续高频。
+- **每日上限**：BOSS直聘 沟通数通常 100/天，留余量。
+- **绝不绕过验证码**：遇到就停，交给人。
+- **优先低频平台**：智联 / 前程无忧 / 猎聘 风控远松于 BOSS直聘，适合走量。
+
+---
+
+## 代码示例
+
+`agent/examples/` 下是可直接跑的完整示例（用 `agent/lib/client.js` 公共模块）：
+
+| 文件 | 演示的技法 |
+|---|---|
+| `vue-call-api.js` | **Vue**：读方法源码找到真正的 API 方法，绕过失效的 UI 校验直接调用 |
+| `react-fiber-click.js` | **React 16**：走 fiber 树拿到 `onClick`，点开隐藏按钮 + 处理 Ant Design 确认框 |
+| `resume-audit.js` | 多平台简历审计：批量检查编造数据、缺失内容、文本损坏 |
+
+`lib/client.js` 是共用基础模块：
+
+```js
+const { pe, goto, extract, nap } = require('./lib/client');
+
+await goto('https://example.com');
+const md = await extract();                    // 结构化 markdown（带链接）
+const title = await pe('document.title');    // 页面主世界执行 JS
+```
+
+---
+
+## 目录结构
+
+```
+├── extension/          浏览器扩展（MV3）
+│   ├── manifest.json
+│   ├── background.js       service worker：路由命令、截图
+│   ├── content-script.js   隔离世界：DOM 操作、forceVisible、pageEval 桥
+│   ├── shadow-hook.js      MAIN 世界：Vue/React 访问、代码执行桥
+│   └── lib.js
+├── agent/              本地代理 + 自动化脚本
+│   ├── agent.js            WebSocket(:61822) + HTTP(:61823)
+│   ├── bridge.js           扩展连接管理
+│   ├── cmd.js              命令行客户端
+│   ├── lib/client.js       公共模块（推荐用这个写脚本）
+│   ├── examples/           技法示例（见上）
+│   ├── scrape-jobs.js      岗位抓取
+│   ├── apply-jobs.js       投递流水线（含按 JD 定制招呼语）
+│   └── rank-jobs.py        岗位过滤 + 匹配度打分
+├── data/               岗位数据
+├── research/           相关开源项目调研
+└── resume/             简历与生成脚本
+```
+
+---
+
+## 许可与免责
+
+仅供个人求职使用。使用者需自行承担因自动化操作导致的账号风险，并遵守各招聘平台的服务条款。
+
+**请勿用于批量骚扰 HR、虚假投递或任何欺诈行为。**

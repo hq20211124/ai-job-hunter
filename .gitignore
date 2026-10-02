@@ -1,0 +1,28 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 运行产物
+shots/
+*.log
+data/agent.log
+
+# 抓取的数据（含个人信息，别提交）
+data/
+
+# 第三方项目的 README 原文（仅作本地调研用，公开仓库请改用链接引用）
+research/
+
+# 简历（含个人隐私，务必排除 —— build_resume.py 里也硬编码了真实联系方式）
+resume/
+
+# 浏览器用户配置（旧方案残留，勿提交）
+.chrome-auto/
+.edge-auto/
+.tmp/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
