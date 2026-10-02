@@ -167,7 +167,7 @@ let fiber = el[key];
 while (fiber) {
   const props = fiber.memoizedProps || fiber.pendingProps;
   if (typeof props.onClick === 'function') {
-    props.onClick({ preventDefault(){}, stopPropagation(){}, /* ... */ });
+    props.onClick({ preventDefault() {}, stopPropagation() {} });
     break;
   }
   fiber = fiber.return;   // walk up the fiber tree
@@ -192,6 +192,7 @@ Runnable example: [`agent/examples/react-fiber-click.js`](agent/examples/react-f
 | **`pageEval` only takes expressions** | `Unexpected token ';'` | Wrap multi-statement code in an IIFE: `(function(){ ... })()` |
 | **Virtualized conversation lists** | The target conversation can't be found by scanning | Use the "unread" tab and the search box, not just the list |
 | **Extension edits don't apply** | New commands fail with `Unknown` | Chrome never hot-reloads extensions — **click reload manually** |
+| **`pageEval` right after a navigation** | Fails with "pageEval timed out" | After a click that navigates, wait 5–7 s for the content script to be injected |
 | **`NAVAGENT_PORT` name collision** | Changing the WS port silently breaks the HTTP client | HTTP port uses `NAVAGENT_HTTP_PORT`; WS port uses `NAVAGENT_PORT` |
 
 ---
