@@ -137,13 +137,26 @@ const NON_DEV = /测试|运维|实施|产品经理|销售|运营|讲师|UI设计
     await nap(3500, 5000);
 
     // 弹窗里点「立即投递」
+    // ⚠️ 必须点 <button.ant-c-btn-primary>，不能点外层的 .ant-c-modal-footer DIV
+    //    —— 三个元素（footer DIV / BUTTON / SPAN）文字都是「立即投递」，
+    //    按文档顺序取第一个会取到 DIV，点了等于没点（这个坑踩过一次）
     const r2 = await pe(`(function(){
-      const el = Array.from(document.querySelectorAll('button, a, span, div')).find(e => (e.innerText||'').trim() === '立即投递' && e.offsetParent !== null && e.children.length <= 1);
+      const el = document.querySelector('button.ant-c-btn-primary')
+        || Array.from(document.querySelectorAll('button')).find(e => (e.innerText||'').trim() === '立即投递' && e.offsetParent !== null);
       if (!el) return 'nf';
-      el.click(); return 'clicked';
+      if (el.disabled) return 'disabled';
+      el.click();
+      return 'clicked:' + el.tagName;
     })()`);
     logline(`  点「立即投递」: ${r2}`);
-    await nap(4000, 6000);
+    await nap(4500, 6500);
+
+    // 核对：弹窗是否消失（弹窗还在 = 没投出去）
+    const modalGone = await pe(`(function(){
+      const box = Array.from(document.querySelectorAll('div,section')).find(e => /选择附件简历/.test(e.innerText||'') && (e.innerText||'').length < 900);
+      return box ? 'still-open' : 'closed';
+    })()`);
+    logline(`  弹窗状态: ${modalGone}`);
 
     // 核对
     const after = await pe(`(function(){
@@ -151,8 +164,8 @@ const NON_DEV = /测试|运维|实施|产品经理|销售|运营|讲师|UI设计
       const modal = Array.from(document.querySelectorAll('[class*="modal"],[class*="dialog"]')).find(e => e.offsetParent !== null && (e.innerText||'').length < 400);
       return (modal ? '弹窗:' + (modal.innerText||'').replace(/\\s+/g,' ').slice(0,120) : '') + ' || 页面:' + body.slice(0, 150);
     })()`);
-    const ok = r2 === 'clicked';
-    logline(`  结果: ${ok ? '✅ 已点击投递' : '⚠️ 未确认'}`);
+    const ok = r2.startsWith('clicked') && modalGone === 'closed';
+    logline(`  结果: ${ok ? '✅ 投递成功（弹窗已关闭）' : '⚠️ 未成功（弹窗仍在或没点到按钮）'}`);
     logline(`  核对: ${after.slice(0, 200)}`);
 
     seen.add(job.jobId);
