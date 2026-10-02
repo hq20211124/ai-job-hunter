@@ -261,8 +261,9 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 │   ├── cmd.js              命令行客户端
 │   ├── lib/client.js       公共模块（推荐用这个写脚本）
 │   ├── examples/           技法示例（见上）
-│   ├── scrape-jobs.js      岗位抓取
-│   ├── apply-jobs.js       投递流水线（含按 JD 定制招呼语）
+│   ├── scrape-jobs.js      岗位抓取（BOSS直聘）
+│   ├── apply-jobs.js       投递流水线（BOSS直聘，含按 JD 定制招呼语）
+│   ├── apply-jobs-zhaopin.js  投递流水线（智联招聘，一键投递 + 简历一起发）
 │   └── rank-jobs.py        岗位过滤 + 匹配度打分
 ├── resume/             简历生成（个人信息放在 gitignore 的 profile.json）
 │   ├── build_resume.py     从 profile.json 生成 Word 简历
