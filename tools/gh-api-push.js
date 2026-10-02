@@ -2,11 +2,15 @@
 /**
  * 通过 GitHub REST API 推送（适用于 github.com:443 被墙、但 api.github.com 可达的网络环境）
  *
- * 原理：用 Git Data API 逐个创建 blob → tree → commit → 更新 ref，
- *      全程只走 api.github.com，不需要 git push。
+ * 原理：用 Git Data API 复刻本地的提交历史 —— 逐提交创建 blob / tree / commit，
+ *      最后更新 ref。全程只走 api.github.com，不需要 git push。
  *
  * 用法：
- *   node gh-api-push.js <owner/repo> [branch] [--message "提交信息"]
+ *   node tools/gh-api-push.js <owner/repo> [branch]
+ *
+ * 可选参数：
+ *   --squash          不保留历史，把当前工作区压成一个提交
+ *   --message "..."   配合 --squash 使用
  *
  * 需要环境变量 GITHUB_TOKEN（或用 `gh auth token` 自动获取）
  */
@@ -16,13 +20,14 @@ const https = require('https');
 const { execSync } = require('child_process');
 
 const REPO = process.argv[2];
-const BRANCH = process.argv[3] || 'main';
+const BRANCH = process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3] : 'main';
 if (!REPO || !REPO.includes('/')) {
-  console.error('用法: node gh-api-push.js <owner/repo> [branch] [--message "提交信息"]');
+  console.error('用法: node tools/gh-api-push.js <owner/repo> [branch] [--squash --message "..."]');
   process.exit(1);
 }
+const SQUASH = process.argv.includes('--squash');
 const mi = process.argv.indexOf('--message');
-const MESSAGE = mi > 0 ? process.argv[mi + 1] : 'Update from gh-api-push';
+const SQUASH_MSG = mi > 0 ? process.argv[mi + 1] : 'Initial commit';
 
 const TOKEN = process.env.GITHUB_TOKEN || (() => {
   try { return execSync('gh auth token', { encoding: 'utf8' }).trim(); }
@@ -61,78 +66,110 @@ function api(method, urlPath, body) {
   });
 }
 
-/** 递归列出仓库里要提交的文件（遵守 .gitignore —— 直接用 git ls-files 最准） */
-function listFiles() {
-  const out = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' });
-  return out.split('\n').map((s) => s.trim()).filter(Boolean);
+const git = (args, opts = {}) =>
+  execSync(`git ${args}`, { cwd: ROOT, encoding: 'buffer', maxBuffer: 500 * 1024 * 1024, ...opts });
+
+const gitText = (args) => git(args, { encoding: 'utf8' });
+
+function readAtCommit(commit, file) {
+  return git(`show ${commit}:${file}`);
 }
 
-/** 是否二进制 */
-function isBinary(buf) {
-  const n = Math.min(buf.length, 8000);
-  for (let i = 0; i < n; i++) if (buf[i] === 0) return true;
-  return false;
+function filesAtCommit(commit) {
+  return gitText(`ls-tree -r --name-only ${commit}`)
+    .split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
-(async () => {
-  const files = listFiles();
-  console.log(`准备推送 ${files.length} 个文件 → ${REPO} (${BRANCH})\n`);
+function localFiles() {
+  return gitText('ls-files').split('\n').map((s) => s.trim()).filter(Boolean);
+}
 
-  // 1. 取当前 ref（空仓库会 404）
-  let baseSha = null;
-  try {
-    const ref = await api('GET', `/repos/${OWNER}/${NAME}/git/ref/heads/${BRANCH}`);
-    baseSha = ref.object.sha;
-    console.log(`  已有分支，父提交 ${baseSha.slice(0, 8)}`);
-  } catch (e) {
-    console.log('  分支不存在（空仓库），将创建初始提交');
-  }
+function commitMessage(commit) {
+  return gitText(`log -1 --format=%B ${commit}`).trim();
+}
 
-  // 2. 为每个文件创建 blob
+async function pushOne({ files, contents, message, parents, index, total, label }) {
   const tree = [];
   let i = 0;
   for (const f of files) {
     i++;
-    const abs = path.join(ROOT, f);
-    const buf = fs.readFileSync(abs);
-    const bin = isBinary(buf);
     const blob = await api('POST', `/repos/${OWNER}/${NAME}/git/blobs`, {
-      content: buf.toString('base64'),
+      content: contents[f].toString('base64'),
       encoding: 'base64',
     });
-    tree.push({
-      path: f.split(path.sep).join('/'),
-      mode: bin ? '100644' : '100644',
-      type: 'blob',
-      sha: blob.sha,
-    });
-    process.stdout.write(`\r  blob ${i}/${files.length}  ${f.slice(0, 50).padEnd(50)}`);
+    tree.push({ path: f, mode: '100644', type: 'blob', sha: blob.sha });
+    process.stdout.write(`\r  [${index}/${total}] ${String(label).slice(0, 30).padEnd(30)} ${i}/${files.length}   `);
   }
-  console.log('\n');
+  const treeRes = await api('POST', `/repos/${OWNER}/${NAME}/git/trees`, { tree });
+  const body = { message, tree: treeRes.sha };
+  if (parents.length) body.parents = parents;
+  const commit = await api('POST', `/repos/${OWNER}/${NAME}/git/commits`, body);
+  process.stdout.write(`\r  [${index}/${total}] ${String(label).slice(0, 30).padEnd(30)} ✓ ${commit.sha.slice(0, 8)}        \n`);
+  return commit.sha;
+}
 
-  // 3. 创建 tree
-  const treeRes = await api('POST', `/repos/${OWNER}/${NAME}/git/trees`, {
-    tree,
-    ...(baseSha ? {} : {}),
-  });
-  console.log(`  tree 已创建: ${treeRes.sha.slice(0, 8)}`);
-
-  // 4. 创建 commit
-  const commitBody = { message: MESSAGE, tree: treeRes.sha };
-  if (baseSha) commitBody.parents = [baseSha];
-  const commit = await api('POST', `/repos/${OWNER}/${NAME}/git/commits`, commitBody);
-  console.log(`  commit 已创建: ${commit.sha.slice(0, 8)}`);
-
-  // 5. 更新 ref
-  if (baseSha) {
-    await api('PATCH', `/repos/${OWNER}/${NAME}/git/refs/heads/${BRANCH}`, { sha: commit.sha, force: false });
-    console.log(`  分支 ${BRANCH} 已更新`);
+async function updateRef(sha, base) {
+  if (base) {
+    await api('PATCH', `/repos/${OWNER}/${NAME}/git/refs/heads/${BRANCH}`, { sha, force: true });
+    console.log(`\n  分支 ${BRANCH} 已更新`);
   } else {
-    await api('POST', `/repos/${OWNER}/${NAME}/git/refs`, { ref: `refs/heads/${BRANCH}`, sha: commit.sha });
-    console.log(`  分支 ${BRANCH} 已创建`);
+    await api('POST', `/repos/${OWNER}/${NAME}/git/refs`, { ref: `refs/heads/${BRANCH}`, sha });
+    console.log(`\n  分支 ${BRANCH} 已创建`);
+  }
+  console.log(`\n✅ 完成: https://github.com/${OWNER}/${NAME}`);
+}
+
+(async () => {
+  console.log(`目标: ${REPO}   分支: ${BRANCH}\n`);
+
+  let remoteHead = null;
+  try {
+    const ref = await api('GET', `/repos/${OWNER}/${NAME}/git/ref/heads/${BRANCH}`);
+    remoteHead = ref.object.sha;
+    console.log(`远端已有分支，HEAD = ${remoteHead.slice(0, 8)}\n`);
+  } catch {
+    console.log('远端分支不存在（空仓库）\n');
   }
 
-  console.log(`\n✅ 完成: https://github.com/${OWNER}/${NAME}`);
+  if (SQUASH || remoteHead) {
+    const files = localFiles();
+    const contents = {};
+    for (const f of files) contents[f] = fs.readFileSync(path.join(ROOT, f));
+    const msg = SQUASH ? SQUASH_MSG : commitMessage('HEAD');
+    console.log(`推送工作区快照（${files.length} 个文件）:\n`);
+    const sha = await pushOne({
+      files, contents, message: msg,
+      parents: remoteHead ? [remoteHead] : [],
+      index: 1, total: 1, label: '(snapshot)',
+    });
+    await updateRef(sha, remoteHead);
+    return;
+  }
+
+  const commits = gitText('rev-list --reverse HEAD')
+    .split('\n').map((s) => s.trim()).filter(Boolean);
+  console.log(`复刻 ${commits.length} 个本地提交:\n`);
+
+  const shaMap = new Map();
+  let idx = 0;
+  for (const c of commits) {
+    idx++;
+    const files = filesAtCommit(c);
+    const contents = {};
+    for (const f of files) contents[f] = readAtCommit(c, f);
+    const parents = gitText(`log -1 --format=%P ${c}`)
+      .trim().split(/\s+/).filter(Boolean)
+      .map((p) => shaMap.get(p)).filter(Boolean);
+    const sha = await pushOne({
+      files, contents,
+      message: commitMessage(c),
+      parents, index: idx, total: commits.length,
+      label: commitMessage(c).split('\n')[0],
+    });
+    shaMap.set(c, sha);
+  }
+
+  await updateRef(shaMap.get(commits[commits.length - 1]), remoteHead);
 })().catch((e) => {
   console.error('\n❌ 失败:', e.message);
   process.exit(1);
