@@ -1,36 +1,9 @@
 /**
- * 投递流水线 —— 逐个职位：进详情 → 读JD+真实薪资 → 定制话术 → 投递 → 发招呼语
- *
- * 用法:
- *   node apply-jobs.js <起始序号> <数量> [--min=15000] [--dry]
- *
- *   起始序号/数量  对应 data/jobs-queue.json 的 1-based 序号
- *   --min=15000   详情页真实月薪上限低于此值的岗位直接跳过（默认 15000）
- *   --dry         只读不投，用于试跑核对
- *
- * 数据文件（全部在 data/，已 gitignore）:
- *   data/jobs-queue.json     投递队列（build-queue.py 产出）
- *   data/apply-results.json  投递历史（只追加，按 URL 去重，不会再被覆盖）
- *   data/jd/                 每个岗位的 JD 存档
- *   data/apply-log.txt       人类可读的投递日志
- *
- * 变更说明（修掉的坑）:
- *   - 原来读 C:\D\agent\find-job\gd-jobs-ranked.json（不存在），改为 data/jobs-queue.json
- *   - 原来每轮 覆盖 apply-results.json，丢失历史 → 改为只追加 + URL 去重
- *   - 原来只按标题正则过滤，外包/人力公司会漏进 → 改为公司黑名单 + 薪资闸门
- *   - 原来不检查是否已投过 → 改为详情页出现「继续沟通」即跳过
+ * 投递流水线 —— 逐个职位：进详情 → 读JD → 定制话术 → 投递 → 发招呼语
+ * 用法: node apply-jobs.js <起始序号> <数量>
  */
 const http = require('http');
 const fs = require('fs');
-const path = require('path');
-
-const ROOT = 'C:\\D\\agent\\find-job';
-const DATA = path.join(ROOT, 'data');
-const QUEUE = path.join(DATA, 'jobs-queue.json');
-const RESULTS = path.join(DATA, 'apply-results.json');
-const JDDIR = path.join(DATA, 'jd');
-const LOG = path.join(DATA, 'apply-log.txt');
-
 function call(command, params = {}, timeout = 150000) {
   return new Promise((resolve) => {
     const body = JSON.stringify({ command, params, timeout });
@@ -48,42 +21,6 @@ function call(command, params = {}, timeout = 150000) {
 }
 const nap = (a = 2000, b = 3500) => new Promise(r => setTimeout(r, a + Math.random() * (b - a)));
 const txt = r => String(r?.result?.result ?? '');
-const logline = (s) => { console.log(s); fs.appendFileSync(LOG, s + '\n', 'utf8'); };
-
-/** 外包 / 驻场 / 派遣 公司名兜底（队列是离线筛的，这里再挡一道） */
-const OUTSOURCE_COMPANY = /人力|人才|劳务|外服|派遣|外包|企业管理|万宝盛华|人瑞|人惠|中智|仁联|科锐|高凡|拓保|博才|易才|朗钧|外企德科|FESCO|佰钧成|中科铭天|腾信软创|网新|赛意|华立数字|中软国际|软通动力|中电金信|文思海辉|博彦|法本|同海科技|同方鼎欣|中科软|贸易商行|商行/i;
-
-/**
- * JD 层面的驻场/外包检测。
- * 注意要排除否定语境：港融科技的 JD 写的是「自研非外包」，那是好事，不能误杀。
- */
-function outsourceSignal(jdText) {
-  const NEG = /(无需|不需要|不用|非|不)驻场|自研非外包|非外包|无外包|不是外包|不涉及外包/;
-  const hits = [];
-  if (/驻场/.test(jdText) && !NEG.test(jdText)) hits.push('驻场');
-  return hits;
-}
-
-/** 解析详情页薪资文本，返回 {min,max,raw}（单位：元/月） */
-function parseSalary(raw) {
-  const s = String(raw || '').replace(/\s+/g, '');
-  if (!s) return null;
-  const nums = [];
-  const re = /(\d+(?:\.\d+)?)\s*([Kk千万]?)/g;
-  let m;
-  while ((m = re.exec(s))) {
-    let v = parseFloat(m[1]);
-    const u = m[2];
-    if (u === 'K' || u === 'k') v *= 1000;
-    else if (u === '万') v *= 10000;
-    else if (u === '千') v *= 1000;
-    else if (v < 1000) v *= 1000;   // 「8-10K」里的裸数字按 K 处理
-    nums.push(Math.round(v));
-  }
-  const vals = nums.filter(v => v >= 1000 && v <= 1000000);
-  if (!vals.length) return null;
-  return { min: Math.min(...vals), max: Math.max(...vals), raw: s };
-}
 
 /** 根据职位特征挑选最贴合的自我介绍片段 */
 function buildGreeting(job, jd) {
@@ -113,33 +50,12 @@ function buildGreeting(job, jd) {
   ].join('\n');
 }
 
-/**
- * 生成会话匹配词：公司名各截断 + 职位名。
- * 兜底加职位名，因为会话列表的预览就是「您好，看到「职位名」这个岗位。…」，
- * 公司名截断匹配不到时（BOSS 会话里有时不显示公司全名）还能靠标题命中。
- */
-function companyKeywords(job) {
-  const c = job.company || '';
-  const t = (job.title || '').replace(/[\s（）()【】[\]]/g, '');
-  const cands = [
-    c,
-    c.replace(/有限公司|股份有限公司|科技|集团|公司|（.*?）|\(.*?\)/g, '').trim(),
-    c.slice(0, 4),
-    c.slice(0, 3),
-    c.slice(0, 2),
-    job.title,
-    t.slice(0, 10),
-    t.slice(0, 8),
-  ];
-  return [...new Set(cands.filter(x => x && x.length >= 2))];
-}
-
-/** 打开刚投递的会话。命中返回 true */
 async function openConversation(keywords) {
-  const q = await call('query', { selector: '.friend-content .text', limit: 120 });
+  const q = await call('query', { selector: '.friend-content', limit: 100 });
   const items = (q.result?.items || []).filter(i => i.visible && i.text.length > 10);
   if (!items.length) return { ok: false, why: '会话列表为空' };
 
+  // 依次尝试多个候选关键词
   for (const kw of keywords) {
     if (!kw || kw.length < 2) continue;
     const t = items.find(i => i.text.includes(kw));
@@ -152,159 +68,121 @@ async function openConversation(keywords) {
       }
     }
   }
-  return { ok: false, why: '会话未匹配到公司名（可能投递未成功）' };
+
+  // 兜底：刚投递的会话应该在最前面，尝试前 3 条
+  for (let i = 1; i <= Math.min(3, items.length); i++) {
+    const c = await call('clickSel', { selector: '.friend-content .text', nth: i });
+    if (!c.ok) continue;
+    await nap(3000, 4500);
+    const rd = await call('read', {}, 30000);
+    const page = txt(rd);
+    // 确认打开的是某个会话（右侧不再是空状态提示）
+    if (!/与您进行过沟通的 Boss 都会在左侧列表中显示/.test(page)) {
+      return { ok: true, matched: `兜底第${i}条`, text: items[i - 1].text.slice(0, 60) };
+    }
+  }
+  return { ok: false, why: '所有候选都未匹配' };
+}
+
+/** 生成公司名的多个候选匹配词 */
+function companyKeywords(job) {
+  const c = job.company || '';
+  const cands = [
+    c,
+    c.replace(/有限公司|股份有限公司|科技|集团|公司|（.*?）|\(.*?\)/g, '').trim(),
+    c.slice(0, 4),
+    c.slice(0, 3),
+    c.slice(0, 2),
+  ];
+  return [...new Set(cands.filter(x => x && x.length >= 2))];
 }
 
 (async () => {
-  const args = process.argv.slice(2);
-  const dry = args.includes('--dry');
-  const minArg = args.find(a => a.startsWith('--min='));
-  const MIN_SALARY = minArg ? Number(minArg.split('=')[1]) : 15000;
-  const pos = args.filter(a => !a.startsWith('--'));
-  const start = Number(pos[0] || 1) - 1;
-  const count = Number(pos[1] || 3);
+  const start = Number(process.argv[2] || 1) - 1;
+  const count = Number(process.argv[3] || 3);
+  const jobs = JSON.parse(fs.readFileSync('C:\\D\\agent\\find-job\\gd-jobs-ranked.json', 'utf8'));
 
-  const queue = JSON.parse(fs.readFileSync(QUEUE, 'utf8'));
-  const history = fs.existsSync(RESULTS) ? JSON.parse(fs.readFileSync(RESULTS, 'utf8')) : [];
-  // 只有「真的接触过」才永久跳过。
-  // 因薪资过低 / DRY-RUN 被跳过的记录不算接触过 —— 否则放宽薪资条件后这些岗位会被永久挡住。
-  const contacted = h => h.ok === true || /已沟通过/.test(String(h.why || ''));
-  const doneUrls = new Set(history.filter(contacted).map(h => h.url));
-  if (!fs.existsSync(JDDIR)) fs.mkdirSync(JDDIR, { recursive: true });
+  // 标题必须是开发/技术类岗位，否则跳过（防止"车间主任"这类误投）
+  const DEV_TITLE = /java|后端|服务端|开发|研发|架构|技术|engineer|developer|backend|程序|软件|系统/i;
+  const batch = jobs.slice(start, start + count).filter(j => {
+    if (!DEV_TITLE.test(j.title)) {
+      console.log(`⏭️  跳过非开发岗: ${j.title} | ${j.company}`);
+      return false;
+    }
+    return true;
+  });
 
-  const batch = queue.slice(start, start + count);
-  logline(`\n${'#'.repeat(72)}`);
-  logline(`# ${new Date().toLocaleString('zh-CN')}  ${dry ? '[DRY-RUN] ' : ''}队列 #${start + 1}..#${start + batch.length} / 共 ${queue.length}  |  薪资下限 ${MIN_SALARY}`);
-  logline(`${'#'.repeat(72)}`);
-
-  const newRecords = [];
-  let skipped = 0, appliedOk = 0;
+  const results = [];
 
   for (let k = 0; k < batch.length; k++) {
     const job = batch[k];
     const idx = start + k + 1;
-    logline(`\n${'='.repeat(70)}`);
-    logline(`【${idx}】${job.title}  |  ${job.company}  |  ${job.location}  |  score ${job._score}`);
-    logline('='.repeat(70));
-
-    if (doneUrls.has(job.url)) { logline('  ⏭️  历史记录里已投过，跳过'); skipped++; continue; }
+    console.log(`\n${'='.repeat(70)}`);
+    console.log(`【${idx}】${job.title}  |  ${job.company}  |  ${job.location}`);
+    console.log('='.repeat(70));
 
     // ① 进详情页
     let r = await call('goto', { url: job.url });
-    if (!r.ok) { logline('  ❌ 打开失败: ' + r.error); newRecords.push({ ...job, ok: false, why: '打开失败', ts: Date.now() }); continue; }
-    await nap(4000, 6000);
+    if (!r.ok) { console.log('  ❌ 打开失败:', r.error); results.push({ ...job, ok: false, why: '打开失败' }); continue; }
+    await nap(3500, 5000);
 
-    // ② 读真实薪资（列表页薪资被 BOSS 字体反爬混淆，详情页是明文）
-    const salRaw = await call('pageEval', { code: `(function(){ const e=document.querySelector('.salary'); return e ? String(e.innerText).trim() : ''; })()` });
-    const salary = parseSalary(txt(salRaw));
-    logline(`  薪资(详情页明码): ${salary ? salary.raw : '(未读到)'}`);
-
-    if (salary && salary.max < MIN_SALARY) {
-      logline(`  ⏭️  薪资上限 ${salary.max} < ${MIN_SALARY}，跳过`);
-      skipped++; newRecords.push({ ...job, ok: false, why: `薪资过低(${salary.raw})`, salary: salary.raw, ts: Date.now() });
-      continue;
-    }
-
-    // ③ 读 JD
+    // ② 读 JD
     r = await call('extract', { max_length: 25000, offset: 0 });
     const jd = txt(r);
     const jdText = jd.replace(/\[[^\]]*\]\([^)]*\)/g, ' ').replace(/\s+/g, ' ');
-    const jdFile = path.join(JDDIR, `${idx}-${(job.company || '').replace(/[\\/:*?"<>|]/g, '_')}.txt`);
-    fs.writeFileSync(jdFile, `职位: ${job.title}\n公司: ${job.company}\n地点: ${job.location}\n薪资: ${salary ? salary.raw : '?'}\nURL: ${job.url}\n\n${jd}`, 'utf8');
-    logline(`  JD ${jd.length} 字符 → ${path.basename(jdFile)}`);
+    fs.writeFileSync(`C:\\D\\agent\\find-job\\jd-apply-${idx}.txt`,
+      `职位: ${job.title}\n公司: ${job.company}\n地点: ${job.location}\nURL: ${job.url}\n\n${jd}`, 'utf8');
+    console.log(`  JD ${jd.length} 字符`);
 
-    // ③.5 公司名兜底（队列是离线筛的，可能有不一致）
-    if (OUTSOURCE_COMPANY.test(job.company || '')) {
-      logline(`  ⏭️  公司名命中外包/人力黑名单：${job.company}，跳过`);
-      skipped++; newRecords.push({ ...job, ok: false, why: '公司名命中外包黑名单', salary: salary?.raw, ts: Date.now() });
-      continue;
-    }
-
-    // ③.6 JD 里出现「驻场」就跳过（用户底线：不接受外包/驻场）
-    const sig = outsourceSignal(jdText);
-    if (sig.length) {
-      logline(`  ⏭️  JD 命中外包/驻场信号：${sig.join('、')}，跳过`);
-      skipped++; newRecords.push({ ...job, ok: false, why: `JD含${sig.join('/')}`, salary: salary?.raw, ts: Date.now() });
-      continue;
-    }
-
-    // ④ 是否已投过（按钮变成「继续沟通」）
-    let btnText = '';
-    for (const sel of ['a[class*="chat"]', '[class*="chat"] a', 'a', 'button']) {
-      const q = await call('query', { selector: sel, limit: 100 });
-      const item = (q.result?.items || []).find(i => i.visible && /^(立即沟通|继续沟通|沟通中)$/.test(i.text.trim()));
-      if (item) { btnText = item.text.trim(); break; }
-    }
-    if (btnText === '继续沟通') { logline('  ⏭️  该岗位已沟通过，跳过'); skipped++; newRecords.push({ ...job, ok: false, why: '已沟通过', salary: salary?.raw, ts: Date.now() }); continue; }
-
-    if (dry) {
-      logline('  [DRY] 不做任何点击，仅预览招呼语：');
-      logline('  ' + buildGreeting(job, jdText).replace(/\n/g, '\n  '));
-      newRecords.push({ ...job, ok: false, why: 'DRY-RUN', salary: salary?.raw, ts: Date.now() });
-      continue;
-    }
-
-    // ⑤ 点「立即沟通」
+    // ③ 点「立即沟通」
     let applied = false;
     for (const sel of ['a[class*="chat"]', '[class*="chat"] a', 'a']) {
-      const q = await call('query', { selector: sel, limit: 100 });
+      const q = await call('query', { selector: sel, limit: 80 });
       const btn = (q.result?.items || []).find(i => i.visible && i.text.trim() === '立即沟通');
       if (btn) {
         const c = await call('clickSel', { selector: sel, nth: btn.i });
-        if (c.ok) { applied = true; logline(`  ✅ 已点「立即沟通」(${sel} #${btn.i})`); break; }
+        if (c.ok) { applied = true; console.log(`  ✅ 已点「立即沟通」(${sel} #${btn.i})`); break; }
       }
     }
-    if (!applied) logline('  ⚠️ 没找到「立即沟通」按钮');
-    await nap(4500, 6500);
+    if (!applied) { console.log('  ⚠️ 没找到「立即沟通」按钮（可能已投过）'); }
+    await nap(4000, 6000);
 
-    // ⑥ 打开会话发招呼语
+    // ④ 打开会话发招呼语
     await call('goto', { url: 'https://www.zhipin.com/web/geek/chat' });
-    await nap(4500, 6000);
+    await nap(4000, 5500);
     const conv = await openConversation(companyKeywords(job));
-    logline('  会话匹配: ' + (conv.ok ? `✅ 命中「${conv.matched}」` : `⚠️ ${conv.why}`));
-
-    let sent = false, greeting = '';
+    console.log(`  会话匹配:`, conv.ok ? `✅ 命中「${conv.matched}」` : `⚠️ ${conv.why}`);
     if (conv.ok) {
-      greeting = buildGreeting(job, jdText);
-      await call('typeSel', { selector: '.chat-input', text: greeting, submit: false, fast: true });
-      await nap(2000, 3000);
-
-      // 读输入框回显，确认文字真的进去了（防止「未知发送」）
-      const typed = await call('pageEval', { code: `(function(){ const e=document.querySelector('.chat-input'); return e ? String(e.innerText||e.value||'').trim() : ''; })()` });
-      const typedLen = txt(typed).length;
-      if (typedLen < 10) logline(`  ⚠️ 输入框回显只有 ${typedLen} 字，可能没输入成功`);
-
-      const bq = await call('query', { selector: 'button', limit: 60 });
+      const greeting = buildGreeting(job, jdText);
+      r = await call('typeSel', { selector: '.chat-input', text: greeting, submit: false, fast: true });
+      await nap(1800, 2800);
+      const bq = await call('query', { selector: 'button', limit: 40 });
       const sendBtn = (bq.result?.items || []).find(i => i.visible && i.text.trim() === '发送');
       if (sendBtn) {
-        await call('clickSel', { selector: 'button', nth: sendBtn.i });
-        await nap(4000, 5500);
-        // 唯一成功判据：输入框已清空
-        const after = await call('pageEval', { code: `(function(){ const e=document.querySelector('.chat-input'); return e ? String(e.innerText||e.value||'').trim() : ''; })()` });
-        sent = txt(after).length === 0;
-        logline('  招呼语: ' + (sent ? '✅ 已发送（输入框已清空）' : `❌ 未发出（残留 ${txt(after).length} 字）`));
+        const sc = await call('clickSel', { selector: 'button', nth: sendBtn.i });
+        await nap(3500, 5000);
+        const ib = await call('query', { selector: '.chat-input', limit: 5 });
+        const box = (ib.result?.items || [])[0];
+        const sent = !box || !box.text.trim();
+        console.log('  招呼语:', sent ? '✅ 已发送' : '❌ 未发出');
+        results.push({ ...job, ok: applied && sent, greeting });
       } else {
-        logline('  ❌ 找不到发送按钮');
+        console.log('  ❌ 找不到发送按钮');
+        results.push({ ...job, ok: false, why: '无发送按钮' });
       }
+    } else {
+      results.push({ ...job, ok: applied, why: '会话未找到' });
     }
-    if (sent) appliedOk++;
-
-    newRecords.push({
-      ...job, ok: applied && sent, salary: salary?.raw, greeting, ts: Date.now(),
-      why: sent ? undefined : (conv.ok ? '招呼语未发出' : '会话未匹配到（已点沟通但未发话）'),
-    });
 
     const wait = 12000 + Math.random() * 15000;
-    logline(`  （等待 ${(wait / 1000).toFixed(0)} 秒，人类节奏）`);
+    console.log(`  （等待 ${(wait / 1000).toFixed(0)} 秒，人类节奏）`);
     await new Promise(res => setTimeout(res, wait));
   }
 
-  // ⑦ 只追加，不覆盖
-  const merged = history.concat(newRecords);
-  fs.writeFileSync(RESULTS, JSON.stringify(merged, null, 2), 'utf8');
-
-  logline(`\n${'='.repeat(70)}\n本轮汇总：成功 ${appliedOk} / 处理 ${batch.length}（跳过 ${skipped}）`);
-  newRecords.forEach(r => logline(`  ${r.ok ? '✅' : '⚠️ '} ${r.title} | ${r.company} | ${r.salary || '-'} | ${r.why || '招呼语已发送'}`));
-  logline(`历史累计: ${merged.length} 条 → ${RESULTS}`);
+  fs.writeFileSync('C:\\D\\agent\\find-job\\apply-results.json', JSON.stringify(results, null, 2), 'utf8');
+  console.log(`\n\n${'='.repeat(70)}\n汇总`);
+  results.forEach(r => console.log(`  ${r.ok ? '✅' : '❌'} ${r.title} | ${r.company}`));
+  const okN = results.filter(r => r.ok).length;
+  console.log(`成功 ${okN} / ${results.length}`);
   process.exit(0);
 })();

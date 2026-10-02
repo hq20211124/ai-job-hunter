@@ -12,9 +12,7 @@
 const http = require('http');
 const bridge = require('./bridge');
 
-// HTTP 命令端口（脚本 / AI 从这里下命令）
-// 扩展连接的 WebSocket 端口见 bridge.js，由 NAVAGENT_PORT 控制，默认 61822
-const HTTP_PORT = Number(process.env.NAVAGENT_HTTP_PORT || 61823);
+const HTTP_PORT = 61823;
 
 function json(res, code, obj) {
   const body = JSON.stringify(obj);
