@@ -152,7 +152,10 @@ async function openConversation(keywords) {
 
   const queue = JSON.parse(fs.readFileSync(QUEUE, 'utf8'));
   const history = fs.existsSync(RESULTS) ? JSON.parse(fs.readFileSync(RESULTS, 'utf8')) : [];
-  const doneUrls = new Set(history.map(h => h.url));
+  // 只有「真的接触过」才永久跳过。
+  // 因薪资过低 / DRY-RUN 被跳过的记录不算接触过 —— 否则放宽薪资条件后这些岗位会被永久挡住。
+  const contacted = h => h.ok === true || /已沟通过/.test(String(h.why || ''));
+  const doneUrls = new Set(history.filter(contacted).map(h => h.url));
   if (!fs.existsSync(JDDIR)) fs.mkdirSync(JDDIR, { recursive: true });
 
   const batch = queue.slice(start, start + count);
