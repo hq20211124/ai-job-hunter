@@ -1,14 +1,8 @@
 # AI 求职自动化 —— 浏览器扩展方案
 
-[中文](README.md) | **English** → [`README.en.md`](README.en.md)
-
 用 AI 代替人操作招聘网站：看职位、读 JD、投简历、和 HR 聊天。
 
 **核心思路：不启动新浏览器、不用 CDP、不复制用户配置，而是装一个浏览器扩展，在你**真实登录的 Chrome** 里干活。**
-
-> 📖 **第一次用？请看保姆级教程：[`docs/TUTORIAL.md`](docs/TUTORIAL.md)**
->
-> 从装 Node.js 开始，一步步带你装扩展、起代理、抓岗位、筛选、投递，并教你配合 AI 助手使用。**读完就能上手。**
 
 ---
 
@@ -26,10 +20,6 @@
 ---
 
 ## 架构
-
-![架构图](docs/architecture.svg)
-
-下面同一张图的文字版（方便复制到别处）：
 
 ```
 ┌─────────────────┐   chrome.tabs.sendMessage   ┌──────────────────┐
@@ -53,8 +43,6 @@
 ---
 
 ## 快速开始
-
-> 想看详细的分步教程（含截图说明、排错清单、AI 助手配合用法），请直接看 **[`docs/TUTORIAL.md`](docs/TUTORIAL.md)**。下面是精简版。
 
 ### 1. 装扩展
 
@@ -154,14 +142,12 @@ let fiber = el[key];
 while (fiber) {
   const props = fiber.memoizedProps || fiber.pendingProps;
   if (typeof props.onClick === 'function') {
-    props.onClick({ preventDefault() {}, stopPropagation() {} });
+    props.onClick({ preventDefault(){}, stopPropagation(){}, ... });
     break;
   }
   fiber = fiber.return;   // 沿 fiber 树向上
 }
 ```
-
-> React 17+ 也可能直接在元素上挂 `__reactProps$xxx`，两种都试。
 
 **实例**：猎聘的工作经历删除按钮是 `display:none`（悬停显示），React 16 实现。用上面的方法拿到 `onClick` 并调用，弹出确认框，再点 `.ant-modal-confirm-btns .ant-btn-primary` 完成删除。
 
@@ -179,8 +165,6 @@ while (fiber) {
 | **`pageEval` 只收表达式** | `Unexpected token ';'` | 代码包成 IIFE：`(function(){ ... })()` |
 | **会话列表虚拟滚动** | 扫不到目标会话 | 用「未读」标签 + 搜索框，别只依赖列表 |
 | **扩展改了不生效** | 新命令报 `Unknown` | Chrome 不会热重载扩展，**必须手动点重载** |
-| **跳转后立刻执行 `pageEval`** | 报「命令 pageEval 超时」 | 点击导致跳转后要等 5～7 秒，内容脚本才注入完成 |
-| **`NAVAGENT_PORT` 命名冲突** | 改 WebSocket 端口会悄悄弄坏 HTTP 客户端 | HTTP 用 `NAVAGENT_HTTP_PORT`，WebSocket 用 `NAVAGENT_PORT` |
 
 ---
 
@@ -203,20 +187,6 @@ while (fiber) {
 | `vue-call-api.js` | **Vue**：读方法源码找到真正的 API 方法，绕过失效的 UI 校验直接调用 |
 | `react-fiber-click.js` | **React 16**：走 fiber 树拿到 `onClick`，点开隐藏按钮 + 处理 Ant Design 确认框 |
 | `resume-audit.js` | 多平台简历审计：批量检查编造数据、缺失内容、文本损坏 |
-| `add-project-51job.js` | **前程无忧**：批量添加项目经历（调组件 API，实测 8/8 成功） |
-| `add-project-zhaopin.js` | **智联**：批量添加/删除项目经历（含 4 个必踩的坑） |
-| `projects.sample.json` | 上面两个脚本的数据模板 |
-
-> 📘 **实战笔记**（三份，都是踩完坑之后的结论，照着做不用重复探索）：
->
-> - [`docs/PLATFORMS.md`](docs/PLATFORMS.md) —— **四平台操作手册**：每个平台的简历页/附件/消息页入口、
->   Vue 组件 API 与 React fiber 的具体调法、投递与发附件简历的完整动作链、
->   期望城市的支持差异，以及反爬特性（BOSS 列表页薪资字体混淆、会话列表只留 40 条）。
-> - [`docs/SCREENING.md`](docs/SCREENING.md) —— **岗位筛选与去重规则**：外包/驻场/人力公司黑名单、
->   非开发岗与级别不符的排除、JD 层面驻场检测（含否定语境处理）、
->   以及为什么**去重要看详情页按钮而不是会话列表**。
-> - [`docs/ADD-PROJECTS.md`](docs/ADD-PROJECTS.md) —— 「批量填项目经历」专题：选择器作用域、日期必须回车、
->   组件里日期是 Date 对象、页面折叠导致验证误判、删除要传对象而不是索引。
 
 `lib/client.js` 是共用基础模块：
 
@@ -227,22 +197,6 @@ await goto('https://example.com');
 const md = await extract();                    // 结构化 markdown（带链接）
 const title = await pe('document.title');    // 页面主世界执行 JS
 ```
-
----
-
-## 配合 AI 助手使用
-
-**这套工具本身只是「手和眼睛」** —— 它能打开网页、读内容、点按钮，但**不理解内容**。
-
-真正让它有价值的是配合 AI 助手（DeepSeek Harness、Claude Code、Cursor 等能执行命令的助手）：你把需求告诉它，它来读 JD、写招呼语、分析 HR 回复、按需改脚本。
-
-完整的开场提示词、对话示例和三条红线，见教程的 [进阶章节](docs/TUTORIAL.md#进阶配合-ai-助手一起用)。
-
-**三条红线：**
-
-1. **不让 AI 编造经历** —— 它写得很漂亮，但必须是你真做过的事
-2. **不让 AI 写没依据的数字** —— "提升 40%" 面试一问就穿帮
-3. **涉及承诺的事你拍板** —— 面试时间、期望薪资、到岗时间，AI 起草，你确认
 
 ---
 
@@ -261,57 +215,13 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 │   ├── cmd.js              命令行客户端
 │   ├── lib/client.js       公共模块（推荐用这个写脚本）
 │   ├── examples/           技法示例（见上）
-│   ├── scrape-jobs.js      岗位抓取（BOSS直聘）
-│   ├── apply-jobs.js       投递流水线（BOSS直聘，含按 JD 定制招呼语）
-│   ├── apply-jobs-zhaopin.js  投递流水线（智联招聘，一键投递 + 简历一起发）
+│   ├── scrape-jobs.js      岗位抓取
+│   ├── apply-jobs.js       投递流水线（含按 JD 定制招呼语）
 │   └── rank-jobs.py        岗位过滤 + 匹配度打分
-├── resume/             简历生成（个人信息放在 gitignore 的 profile.json）
-│   ├── build_resume.py     从 profile.json 生成 Word 简历
-│   └── profile.example.json  模板
-├── docs/
-│   ├── TUTORIAL.md         保姆级教程
-│   ├── PLATFORMS.md        ★ 四平台操作手册（入口 / 组件 API / 发附件简历 / 反爬）
-│   ├── SCREENING.md        ★ 岗位筛选与去重规则（外包黑名单 / 去重判据）
-│   ├── ADD-PROJECTS.md     ★ 批量填项目经历的实战笔记（智联/前程无忧）
-│   └── architecture.svg
-├── tools/
-│   └── gh-api-push.js      网络受限时用 REST API 推送（见下）
-└── data/               岗位数据（已 gitignore）
+├── data/               岗位数据
+├── research/           相关开源项目调研
+└── resume/             简历与生成脚本
 ```
-
----
-
-## 推不上去？用 `tools/gh-api-push.js`
-
-如果你所在网络 **`github.com:443` 连不上、但 `api.github.com` 通**（国内常见），`git push` 会失败：
-
-```
-fatal: unable to access 'https://github.com/...': Failed to connect to github.com
-```
-
-这时用这个工具，它走 GitHub 的 Git Data API 推送，**全程只碰 `api.github.com`**：
-
-```bash
-node tools/gh-api-push.js <用户名>/<仓库名> main --message "提交信息"
-```
-
-它做的事：`git ls-files` 列出要提交的文件 → 逐个建 blob → 建 tree → 建 commit → 更新 ref。
-**完全遵守 `.gitignore`**（因为用 `git ls-files` 取文件列表），不需要 `git push`。
-
-Token 从 `GITHUB_TOKEN` 环境变量读，没有就调 `gh auth token`（需先 `gh auth login`）。
-
----
-
-## 端口与环境变量
-
-| 变量 | 默认 | 作用 |
-|---|---|---|
-| `NAVAGENT_HOST` | `127.0.0.1` | 代理地址（脚本侧） |
-| `NAVAGENT_HTTP_PORT` | `61823` | **脚本下命令**的 HTTP 端口 |
-| `NAVAGENT_PORT` | `61822` | **扩展连接**的 WebSocket 端口 |
-
-> ⚠️ 这两个端口是独立的，别搞混：61822 是「扩展 → 代理」，61823 是「你 → 代理」。
-> 改 WebSocket 端口时，扩展选项页里的端口也要同步改。
 
 ---
 
