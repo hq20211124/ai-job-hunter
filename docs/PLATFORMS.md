@@ -490,7 +490,95 @@ v.saveSelfInfo();                              // 绕过校验，直达 API
 
 ---
 
-## 7. 反爬与风控
+## 7. 期望城市 / 求职意向
+
+各平台对「期望城市」的支持差别很大，**直接决定你能不能投全省**。
+
+| 平台 | 字段 | 支持几个城市 | 能否表达「广东全省」 |
+|---|---|---|---|
+| BOSS直聘 | 工作城市 + 其他感兴趣的城市 | 1 主 + **最多 9 个** | ✅ 主城市 + 其余 9 个广东省内城市 |
+| 智联招聘 | 求职意向 · 期望城市 | 多选 | ⚠️ 级联选择器不响应合成事件 |
+| 前程无忧 | 求职意向 · `expectArea` | **只有 1 个** | ❌ 单城市字段，放不下 |
+| 猎聘 | 求职期望 · 期望地点 | 多选（实见「广州、深圳」） | 需走 React 路线 |
+
+### 7.1 BOSS直聘：工作城市 + 「其他感兴趣的城市」
+
+**组件与数据模型**（实测）：
+
+```js
+// 期望职位表单组件
+const v = document.querySelector('.expectation-form').__vue__;
+
+v.$data.cityOptions            // 城市全量树 [{code, name, subLevelModelList:[...]}]
+v.$data.formData.cityValue     // [101280000, 101280100, 0]  ← 省 / 市 / 区
+v.$data.formData.locationName  // '广州'
+v.$data.interestLocationList   // []  ← 「其他感兴趣的城市」的城市对象数组
+v.$data.interestLocationCode   // []  ← 对应的 code 数组
+
+// 组件内部改值的入口
+v.selectCityChange(list)       // 把 list 赋给 interestLocationList
+```
+
+**⚠️ 城市多选面板的合成点击无效**：`el.click()` 和完整鼠标事件序列都点不动，
+`.select-section` 里的计数一直停在 `0/9`。**必须直接写组件数据**：
+
+```js
+const v = document.querySelector('.expectation-form').__vue__;
+const names = ['深圳','东莞','佛山','中山','珠海','惠州','江门','汕头','肇庆'];
+const picked = [];
+(function walk(nodes){
+  (nodes || []).forEach(n => {
+    if (names.includes(n.name) && !picked.some(p => p.name === n.name)) picked.push(n);
+    if (n.subLevelModelList && n.subLevelModelList.length) walk(n.subLevelModelList);
+  });
+})(v.$data.cityOptions);
+
+v.interestLocationList = picked;
+v.interestLocationCode = picked.map(x => x.code);
+if (v.formData) v.formData.interestLocationList = picked;
+
+// 然后点表单里的「完成」按钮 —— 这个按钮的合成点击是有效的
+```
+
+> **上限 9 个**。面板里广东省内能选的就是广州、深圳、东莞、佛山、中山、珠海、惠州、江门、汕头、肇庆
+> —— 除广州作主城市外全选，即覆盖全省。
+>
+> **刷新后核对**，期望职位区块应显示为：
+> `期望职位 全职职位 Java面议广州，深圳，惠州，汕头，珠海，佛山，肇庆，江门，东莞，中山`
+
+> 💡 `cityOptions` 里同一个城市会出现多次（热门城市区 + 按字母列表区），
+> 去重按键名判断即可，服务端自己会去重。
+
+### 7.2 前程无忧：单城市，改不了全省
+
+保存时用的是**单值**：
+
+```js
+// hanlendOnEditOnClick 的 payload
+{ salaryType: 1,
+  expectArea: this.careerObjectiveRuleForm.cityInfo.code,   // ← 只有一个城市 code
+  expectIndustry, expectFunction, seekType, maxSalary, minSalary, salaryMonth }
+```
+
+字段在 `.careerObjective` 组件的 `careerObjectiveRuleForm.cityInfo.code`；
+`onChange(e)` 的实现就是 `this.careerObjectiveRuleForm.cityInfo.code = e.code`。
+
+**结论：前程无忧只能填一个城市，「广东全省」表达不了** —— 保留广州即可。
+
+### 7.3 简历本体的期望城市
+
+本地简历在 `resume/profile.json` 的 `headline`：
+
+```json
+"headline": "高级 Java 开发工程师　·　7 年工作经验　·　期望城市：广东全省　·　一周内到岗"
+```
+
+改完重新生成（`build_resume.py` → LibreOffice 转 PDF），再**手动**上传到四个平台的附件
+（上传不能自动化，见第 6 节）。
+
+---
+
+## 8. 反爬与风控
 
 | 机制 | 表现 | 应对 |
 |---|---|---|
@@ -509,7 +597,7 @@ v.saveSelfInfo();                              // 绕过校验，直达 API
 
 ---
 
-## 8. 踩坑速查表（汇总）
+## 9. 踩坑速查表（汇总）
 
 | 症状 | 原因 | 解法 |
 |---|---|---|
@@ -528,10 +616,13 @@ v.saveSelfInfo();                              // 绕过校验，直达 API
 | 改了扩展不生效 | Chrome 不热重载扩展 | `chrome://extensions` 手动点 ⟳ |
 | 点击导致跳转后 `pageEval` 超时 | 内容脚本还没注入 | 等 5-7 秒再执行 |
 | 会话列表序号对不上 | `[class*="friend-content"]` 命中了 warp | 用精确的 `.friend-content` |
+| 城市多选面板点不动 | `.select-section` 计数停在 `0/9` | 直接写组件的 `interestLocationList` / `interestLocationCode` |
+| 工具栏「换电话/换微信」点不开 | 是悬停弹层 `.sentence-popover` | 弹层在 DOM 里但 `display:none`；微信那条**没有**对应弹层，只能人工 |
+| 求职意向保存报"请选择…" | 校验没通过 | 点「完成」= `submitSave()` → 走 `validate()`，字段必须真的写进组件数据 |
 
 ---
 
-## 9. 三条最贵的教训
+## 10. 三条最贵的教训
 
 1. **验证写操作，读数据源（组件 `$data`/`$props`），不读 DOM。**
    DOM 会被折叠、虚拟滚动、懒加载影响。曾经因为数 DOM 误判失败而反复重试，往简历里塞了 9 条测试垃圾数据。
