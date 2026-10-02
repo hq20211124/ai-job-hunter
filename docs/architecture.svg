@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="920" height="620" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4A5568"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3182CE"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#38A169"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="620" fill="#FFFFFF"/>
+
+  <!-- ===== Chrome 浏览器 ===== -->
+  <rect x="30" y="30" width="540" height="430" rx="14" fill="#F7FAFC" stroke="#CBD5E0" stroke-width="2"/>
+  <text x="52" y="62" font-size="16" font-weight="700" fill="#2D3748">Chrome（你自己日常用的那个）</text>
+  <text x="52" y="82" font-size="12" fill="#718096">真实登录态 · 真实 Cookie · 真实设备指纹</text>
+
+  <!-- 招聘网站页面 -->
+  <rect x="55" y="100" width="490" height="120" rx="10" fill="#FFF5F5" stroke="#FC8181" stroke-width="1.5"/>
+  <text x="75" y="126" font-size="14" font-weight="600" fill="#C53030">招聘网站页面</text>
+  <text x="75" y="146" font-size="12" fill="#718096">BOSS直聘 · 智联招聘 · 猎聘 · 前程无忧</text>
+  <text x="75" y="166" font-size="11" fill="#A0AEC0">Vue / React 应用，关键控件可能只认真实鼠标事件</text>
+  <text x="75" y="186" font-size="11" fill="#A0AEC0">Vue 实例 / React fiber 都在这一层</text>
+  <text x="75" y="206" font-size="11" fill="#38A169">✓ 扩展与页面同源，可直接操作 DOM</text>
+
+  <!-- MAIN world -->
+  <rect x="55" y="235" width="490" height="72" rx="10" fill="#F0FFF4" stroke="#68D391" stroke-width="1.5"/>
+  <text x="75" y="259" font-size="13" font-weight="600" fill="#276749">shadow-hook.js　（MAIN 世界 = 页面上下文）</text>
+  <text x="75" y="279" font-size="11" fill="#4A5568">能访问页面的 Vue / React 实例 · 代码执行桥</text>
+  <text x="75" y="296" font-size="11" fill="#4A5568">用途：读组件方法源码、直接调业务 API、走 fiber 树取事件处理器</text>
+
+  <!-- Content script -->
+  <rect x="55" y="322" width="490" height="60" rx="10" fill="#EBF8FF" stroke="#63B3ED" stroke-width="1.5"/>
+  <text x="75" y="346" font-size="13" font-weight="600" fill="#2C5282">content-script.js　（隔离世界 ISOLATED）</text>
+  <text x="75" y="366" font-size="11" fill="#4A5568">DOM 读写 · 点击/输入 · forceVisible 强制显示隐藏控件</text>
+
+  <!-- Background service worker -->
+  <rect x="55" y="397" width="490" height="48" rx="10" fill="#FAF5FF" stroke="#B794F4" stroke-width="1.5"/>
+  <text x="75" y="419" font-size="13" font-weight="600" fill="#553C9A">background.js　（service worker）</text>
+  <text x="75" y="437" font-size="11" fill="#4A5568">命令路由 · 标签页管理 · 截图</text>
+
+  <!-- 内部消息箭头 -->
+  <line x1="300" y1="397" x2="300" y2="382" stroke="#B794F4" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="300" y1="322" x2="300" y2="307" stroke="#63B3ED" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="312" y="386" font-size="10" fill="#805AD5">tabs.sendMessage</text>
+  <text x="312" y="312" font-size="10" fill="#3182CE">postMessage</text>
+
+  <!-- ===== 本地代理 ===== -->
+  <rect x="620" y="150" width="270" height="200" rx="14" fill="#F7FAFC" stroke="#CBD5E0" stroke-width="2"/>
+  <text x="642" y="182" font-size="16" font-weight="700" fill="#2D3748">本地代理 agent.js</text>
+  <text x="642" y="202" font-size="12" fill="#718096">跑在你自己的电脑上</text>
+
+  <rect x="640" y="218" width="230" height="52" rx="8" fill="#FFF5F5" stroke="#FC8181" stroke-width="1.2"/>
+  <text x="655" y="240" font-size="12" font-weight="600" fill="#C53030">ws://127.0.0.1:61822</text>
+  <text x="655" y="258" font-size="11" fill="#718096">扩展作为客户端主动连过来</text>
+
+  <rect x="640" y="282" width="230" height="52" rx="8" fill="#EBF8FF" stroke="#63B3ED" stroke-width="1.2"/>
+  <text x="655" y="304" font-size="12" font-weight="600" fill="#2C5282">http://127.0.0.1:61823</text>
+  <text x="655" y="322" font-size="11" fill="#718096">你的脚本 / AI 下命令的入口</text>
+
+  <!-- ===== 你的脚本 ===== -->
+  <rect x="620" y="390" width="270" height="150" rx="14" fill="#FFFFF0" stroke="#D69E2E" stroke-width="2"/>
+  <text x="642" y="420" font-size="15" font-weight="700" fill="#744210">你的脚本 / AI 助手</text>
+  <text x="642" y="444" font-size="12" fill="#4A5568">cmd.js 命令行</text>
+  <text x="642" y="464" font-size="12" fill="#4A5568">lib/client.js 公共模块</text>
+  <text x="642" y="484" font-size="12" fill="#4A5568">scrape-jobs.js 抓岗位</text>
+  <text x="642" y="504" font-size="12" fill="#4A5568">apply-jobs.js 批量投递</text>
+  <text x="642" y="526" font-size="11" fill="#718096">或任何能发 HTTP 请求的东西</text>
+
+  <!-- ===== 主连接线 ===== -->
+  <!-- 扩展 -> 代理 -->
+  <path d="M 545 421 L 590 421 L 590 235 L 618 235" fill="none" stroke="#38A169" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+  <text x="556" y="330" font-size="11" fill="#276749" transform="rotate(-90 556 330)">WebSocket（扩展主动连）</text>
+
+  <!-- 脚本 -> 代理 -->
+  <path d="M 755 388 L 755 355" fill="none" stroke="#D69E2E" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="765" y="376" font-size="11" fill="#975A16">HTTP POST /cmd</text>
+
+  <!-- ===== 底部说明 ===== -->
+  <rect x="30" y="490" width="860" height="105" rx="10" fill="#F7FAFC" stroke="#E2E8F0" stroke-width="1.5"/>
+  <text x="52" y="514" font-size="13" font-weight="700" fill="#2D3748">为什么不用 CDP / Playwright ？</text>
+  <text x="52" y="537" font-size="11.5" fill="#4A5568">• 新建浏览器配置 → 必须重新扫码登录，且是新设备指纹</text>
+  <text x="52" y="556" font-size="11.5" fill="#4A5568">• CDP 连你日常的 Chrome → 现代 Chrome 拒绝在默认配置目录上开调试端口</text>
+  <text x="52" y="575" font-size="11.5" fill="#4A5568">• 复制/联结配置目录 → 触发 App-Bound Encryption，Cookie 被清空（实测 848 → 35）</text>
+  <text x="500" y="575" font-size="11.5" font-weight="600" fill="#276749">扩展方案：共享真实登录态，网站看到的就是"你本人在用浏览器"</text>
+</svg>
