@@ -458,7 +458,7 @@ const CITIES = [
 ];
 ```
 
-**删掉你不想要的城市，只留你要的。** 城市代码见[附录 A](#附录-a-boss直聘城市代码)。
+**删掉你不想要的城市，只留你要的。** 城市代码见[附录 A](#附录-aboss直聘城市代码)。
 
 比如只想要广州和深圳：
 
@@ -645,7 +645,23 @@ function buildGreeting(job, jd) {
   if (/金融|证券|期货|基金|量化/.test(all)) {
     parts.push('金融方向我做过券商统一大系统下的投资策略研究平台……');
   }
-  ...
+  if (/MES|WMS|制造|工业|仓储|生产|供应链|ERP/.test(all)) {
+    parts.push('工业侧我独立开发过 WMS 仓储 / MES 制造系统……');
+  }
+  if (/架构|技术负责人|组长|Leader|技术经理/.test(all)) {
+    parts.push('架构上我主导过老式多模块单体到微服务 + DDD 的改造……');
+  }
+
+  // 兜底：一个都没匹配上时用的通用版本
+  if (!parts.length) {
+    parts.push('我 7 年 Java 后端，做过微服务架构改造、金融投资策略平台、WMS/MES 制造系统。');
+  }
+
+  return [
+    `您好，看到「${job.title}」这个岗位。`,
+    parts.slice(0, 2).join('\n'),
+    '方便的话想了解下团队规模和技术栈，聊聊看是否合适。',
+  ].join('\n');
 }
 ```
 
@@ -691,15 +707,22 @@ function buildGreeting(job, jd) {
 
 ### 8.2 改数据来源路径
 
-找到这两行，改成你的实际路径：
+找到这一行，把路径改成你自己的：
 
 ```js
+// 抓取结果（rank-jobs.py 的输出）
 const jobs = JSON.parse(fs.readFileSync('C:\\D\\agent\\find-job\\gd-jobs-ranked.json', 'utf8'));
 ```
 
+还有这一行，把 JD 存档写到你想放的地方：
+
 ```js
-fs.writeFileSync(`C:\\D\\agent\\find-job\\jd-apply-${idx}.txt`, ...);
+// 每个岗位的 JD 存档
+const outPath = `C:\\D\\agent\\find-job\\jd-apply-${idx}.txt`;
+fs.writeFileSync(outPath, `职位: ${job.title}\n公司: ${job.company}\n\n${jd}`, 'utf8');
 ```
+
+> 💡 Windows 路径里的反斜杠要写两个（`\\`），因为单个 `\` 在 JS 字符串里是转义符。
 
 ### 8.3 先小批量试跑
 
@@ -828,8 +851,10 @@ const { goto, read, extract, query, clickSel, pe, nap } = require('./lib/client'
   if (links.length) {
     console.log('点击第一个链接…');
     await clickSel('a', 1);
-    await nap(2000, 3000);
-    console.log('现在在:', await pe('(function(){ return location.href; })()'));
+    await nap(5000, 7000);      // ⚠️ 跳转后要多等一会，见下面「坑 4」
+
+    const url = await pe('(function(){ return location.href; })()');
+    console.log('现在在:', typeof url === 'string' ? url : JSON.stringify(url));
   }
 
   console.log('完成');
@@ -856,7 +881,7 @@ node my-first-bot.js
 完成
 ```
 
-### 9.3 三个必须知道的坑
+### 9.3 四个必须知道的坑
 
 #### 坑 1：`pe()` 里的代码必须是「一个表达式」
 
@@ -875,13 +900,20 @@ await pe('document.title');
 
 #### 坑 2：返回对象会变成 `[object Object]`
 
+**错误写法** —— 直接返回对象：
+
 ```js
 // ❌ 拿到的是字符串 "[object Object]"
 const info = await pe('({a: 1, b: 2})');
+```
 
-// ✅ 在页面里先 JSON.stringify，外面再 parse
+**正确写法** —— 在页面里先 `JSON.stringify`，外面再 `JSON.parse`：
+
+```js
+// ✅ 在页面内序列化，在外面反序列化
 const info = await pe('JSON.stringify({a: 1, b: 2})');
 const obj = JSON.parse(info);
+console.log(obj.a);   // 1
 ```
 
 > ⚠️ **这个坑很危险**：如果你拿这个结果去覆盖页面上的内容，会把用户的数据写成 `[object Object]`。**写回页面之前，一定要先 `console.log` 核对内容。**
@@ -909,6 +941,34 @@ node cmd.js showSel "{\"selector\":\".action-delete\",\"nth\":1}"
 输出会告诉你元素的位置和可见性。
 
 **原因 C：页面用了 Vue / React，只认真实用户交互。** 这是最硬的骨头，解法见[第 9.4 节](#94-进阶对付点不动的按钮)。
+
+#### 坑 4：点击导致跳转后，立刻执行 `pe()` 会超时
+
+**症状**：
+
+```
+点击第一个链接…
+现在在: { error: '命令 pageEval 超时' }
+```
+
+**原因**：点击触发了页面跳转，新页面还在加载。此时内容脚本还没注入完成，命令自然没人响应。
+
+**解法**：跳转之后**多等一会**（5～7 秒），再做下一步：
+
+```js
+await clickSel('a', 1);
+await nap(5000, 7000);        // ⚠️ 不要只等 2 秒
+const url = await pe('(function(){ return location.href; })()');
+```
+
+**另外**：`pe()` 出错时返回的是 `{ error: '...' }` 对象而不是字符串。所以取值前先判断类型，否则你的日志里会打出 `[object Object]`：
+
+```js
+const url = await pe('(function(){ return location.href; })()');
+console.log(typeof url === 'string' ? url : JSON.stringify(url));
+```
+
+> 💡 用 `goto()` 直接跳转不受这个影响 —— 它内部会等页面加载完成。只有「点击链接跳转」才需要手动多等。
 
 ### 9.4 进阶：对付「点不动」的按钮
 
@@ -962,10 +1022,9 @@ const { pe, goto, nap } = require('./lib/client');
 })();
 ```
 
-**第 2 步是关键。** 很多网站的「保存」按钮只是个校验包装：
+**第 2 步是关键。** 很多网站的「保存」按钮只是个校验包装，把方法源码打出来就能看清：
 
-```js
-// 读出来的源码长这样：
+```text
 function(e) {
   this.$refs[e].validate(ok => ok && this.saveSelfInfo())
 }
