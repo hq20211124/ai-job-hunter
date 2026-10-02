@@ -11,6 +11,8 @@
  * 可选参数：
  *   --squash          不保留历史，把当前工作区压成一个提交
  *   --message "..."   配合 --squash 使用
+ *   --rebuild         忽略远端已有历史，用本地历史重建一条干净的链（强制覆盖远端分支）
+ *                     用在：远端历史被搞乱、或想让远端与本地完全一致时
  *
  * 需要环境变量 GITHUB_TOKEN（或用 `gh auth token` 自动获取）
  */
@@ -26,6 +28,7 @@ if (!REPO || !REPO.includes('/')) {
   process.exit(1);
 }
 const SQUASH = process.argv.includes('--squash');
+const REBUILD = process.argv.includes('--rebuild');
 const mi = process.argv.indexOf('--message');
 const SQUASH_MSG = mi > 0 ? process.argv[mi + 1] : 'Initial commit';
 
@@ -137,14 +140,22 @@ async function bootstrapEmptyRepo() {
 (async () => {
   console.log(`目标: ${REPO}   分支: ${BRANCH}\n`);
 
-  let remoteHead = null;
+  let remoteHead = null;      // 远端当前 head（用于判断分支是否存在）
+  let baseParent = null;      // 第一个本地提交要挂的父提交
   try {
     const ref = await api('GET', `/repos/${OWNER}/${NAME}/git/ref/heads/${BRANCH}`);
     remoteHead = ref.object.sha;
-    console.log(`远端已有分支，HEAD = ${remoteHead.slice(0, 8)}\n`);
+    baseParent = ref.object.sha;
+    console.log(`远端已有分支，HEAD = ${remoteHead.slice(0, 8)}`);
+    if (REBUILD) {
+      console.log('  --rebuild：忽略远端历史，用本地历史重建干净链条');
+      baseParent = null;
+    }
+    console.log('');
   } catch {
     console.log('远端分支不存在');
     remoteHead = await bootstrapEmptyRepo();
+    baseParent = remoteHead;
   }
 
   if (SQUASH || (remoteHead && remoteHead !== null && process.argv.includes('--append'))) {
@@ -177,7 +188,7 @@ async function bootstrapEmptyRepo() {
       .trim().split(/\s+/).filter(Boolean)
       .map((p) => shaMap.get(p)).filter(Boolean);
     // 第一个本地提交没有父提交 → 挂到基底提交上（若存在）
-    if (!parents.length && remoteHead) parents = [remoteHead];
+    if (!parents.length && baseParent) parents = [baseParent];
     const sha = await pushOne({
       files, contents,
       message: commitMessage(c),
