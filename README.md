@@ -154,12 +154,14 @@ let fiber = el[key];
 while (fiber) {
   const props = fiber.memoizedProps || fiber.pendingProps;
   if (typeof props.onClick === 'function') {
-    props.onClick({ preventDefault(){}, stopPropagation(){}, ... });
+    props.onClick({ preventDefault() {}, stopPropagation() {} });
     break;
   }
   fiber = fiber.return;   // 沿 fiber 树向上
 }
 ```
+
+> React 17+ 也可能直接在元素上挂 `__reactProps$xxx`，两种都试。
 
 **实例**：猎聘的工作经历删除按钮是 `display:none`（悬停显示），React 16 实现。用上面的方法拿到 `onClick` 并调用，弹出确认框，再点 `.ant-modal-confirm-btns .ant-btn-primary` 完成删除。
 
@@ -177,6 +179,8 @@ while (fiber) {
 | **`pageEval` 只收表达式** | `Unexpected token ';'` | 代码包成 IIFE：`(function(){ ... })()` |
 | **会话列表虚拟滚动** | 扫不到目标会话 | 用「未读」标签 + 搜索框，别只依赖列表 |
 | **扩展改了不生效** | 新命令报 `Unknown` | Chrome 不会热重载扩展，**必须手动点重载** |
+| **跳转后立刻执行 `pageEval`** | 报「命令 pageEval 超时」 | 点击导致跳转后要等 5～7 秒，内容脚本才注入完成 |
+| **`NAVAGENT_PORT` 命名冲突** | 改 WebSocket 端口会悄悄弄坏 HTTP 客户端 | HTTP 用 `NAVAGENT_HTTP_PORT`，WebSocket 用 `NAVAGENT_PORT` |
 
 ---
 
