@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 前程无忧（51job）投递流水线
  *
  * 用法:
@@ -44,8 +44,8 @@ const pe = (code, t = 20000) => call('pageEval', { code }, t).then(r => String(r
 const nap = (a = 2000, b = 3500) => new Promise(r => setTimeout(r, a + Math.random() * (b - a)));
 const logline = s => { console.log(s); fs.appendFileSync(LOG, s + '\n', 'utf8'); };
 
-const OUTSOURCE = /人力|人才|劳务|外服|派遣|外包|企业管理|万宝盛华|人瑞|人惠|中智|仁联|科锐|高凡|拓保|博才|易才|朗钧|外企德科|FESCO|佰钧成|中科铭天|腾信软创|网新|赛意|华立数字|中软国际|软通动力|中电金信|文思海辉|博彦|法本|同海科技|同方鼎欣|中科软|众合|贸易商行|商行|人力资源/i;
-const NON_DEV = /测试|运维|实施|产品经理|销售|运营|讲师|UI设计|视觉设计|硬件|结构|电气|机械|采购|财务|编辑|设计师|实习|应届|校招|初级|前台|客服/i;
+const { OUTSOURCE_COMPANY: OUTSOURCE, NON_DEV_TITLE: NON_DEV } = require('./lib/filters');
+
 
 (async () => {
   const args = process.argv.slice(2);

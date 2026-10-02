@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 投递流水线 —— 逐个职位：进详情 → 读JD+真实薪资 → 定制话术 → 投递 → 发招呼语
  *
  * 用法:
@@ -50,40 +50,9 @@ const nap = (a = 2000, b = 3500) => new Promise(r => setTimeout(r, a + Math.rand
 const txt = r => String(r?.result?.result ?? '');
 const logline = (s) => { console.log(s); fs.appendFileSync(LOG, s + '\n', 'utf8'); };
 
-/** 外包 / 驻场 / 派遣 公司名兜底（队列是离线筛的，这里再挡一道） */
-const OUTSOURCE_COMPANY = /人力|人才|劳务|外服|派遣|外包|企业管理|万宝盛华|人瑞|人惠|中智|仁联|科锐|高凡|拓保|博才|易才|朗钧|外企德科|FESCO|佰钧成|中科铭天|腾信软创|网新|赛意|华立数字|中软国际|软通动力|中电金信|文思海辉|博彦|法本|同海科技|同方鼎欣|中科软|贸易商行|商行/i;
+/** 外包 / 驻场 / 派遣 的公司名与 JD 检测 —— 与其它平台脚本共用一份规则 */
+const { OUTSOURCE_COMPANY, outsourceSignal, parseSalary } = require('./lib/filters');
 
-/**
- * JD 层面的驻场/外包检测。
- * 注意要排除否定语境：港融科技的 JD 写的是「自研非外包」，那是好事，不能误杀。
- */
-function outsourceSignal(jdText) {
-  const NEG = /(无需|不需要|不用|非|不)驻场|自研非外包|非外包|无外包|不是外包|不涉及外包/;
-  const hits = [];
-  if (/驻场/.test(jdText) && !NEG.test(jdText)) hits.push('驻场');
-  return hits;
-}
-
-/** 解析详情页薪资文本，返回 {min,max,raw}（单位：元/月） */
-function parseSalary(raw) {
-  const s = String(raw || '').replace(/\s+/g, '');
-  if (!s) return null;
-  const nums = [];
-  const re = /(\d+(?:\.\d+)?)\s*([Kk千万]?)/g;
-  let m;
-  while ((m = re.exec(s))) {
-    let v = parseFloat(m[1]);
-    const u = m[2];
-    if (u === 'K' || u === 'k') v *= 1000;
-    else if (u === '万') v *= 10000;
-    else if (u === '千') v *= 1000;
-    else if (v < 1000) v *= 1000;   // 「8-10K」里的裸数字按 K 处理
-    nums.push(Math.round(v));
-  }
-  const vals = nums.filter(v => v >= 1000 && v <= 1000000);
-  if (!vals.length) return null;
-  return { min: Math.min(...vals), max: Math.max(...vals), raw: s };
-}
 
 /** 根据职位特征挑选最贴合的自我介绍片段 */
 function buildGreeting(job, jd) {
