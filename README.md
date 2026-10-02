@@ -256,8 +256,31 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 ├── docs/
 │   ├── TUTORIAL.md         保姆级教程
 │   └── architecture.svg
+├── tools/
+│   └── gh-api-push.js      网络受限时用 REST API 推送（见下）
 └── data/               岗位数据（已 gitignore）
 ```
+
+---
+
+## 推不上去？用 `tools/gh-api-push.js`
+
+如果你所在网络 **`github.com:443` 连不上、但 `api.github.com` 通**（国内常见），`git push` 会失败：
+
+```
+fatal: unable to access 'https://github.com/...': Failed to connect to github.com
+```
+
+这时用这个工具，它走 GitHub 的 Git Data API 推送，**全程只碰 `api.github.com`**：
+
+```bash
+node tools/gh-api-push.js <用户名>/<仓库名> main --message "提交信息"
+```
+
+它做的事：`git ls-files` 列出要提交的文件 → 逐个建 blob → 建 tree → 建 commit → 更新 ref。
+**完全遵守 `.gitignore`**（因为用 `git ls-files` 取文件列表），不需要 `git push`。
+
+Token 从 `GITHUB_TOKEN` 环境变量读，没有就调 `gh auth token`（需先 `gh auth login`）。
 
 ---
 
