@@ -1,21 +1,40 @@
 /**
  * 岗位过滤的公共规则 —— 四个平台的投递脚本共用这一份。
  *
- * 之前每个平台的投递脚本各抄了一遍黑名单，改一处要改四处，很容易漏。
- * 统一到这里。
+ * 规则本身放在 ../filters.json，这样 Python 脚本（build-queue.py / rank-jobs.py）
+ * 和 JS 脚本读的是同一份名单，不用两边各改一遍。
  *
  * ⚠️ 名单是活的：每投一批，检查一遍实际投出去的公司，
- *    发现新的外包商就补进 OUTSOURCE_COMPANY。
+ *    发现新的外包商就补进 agent/filters.json。
  */
+const fs = require('fs');
+const path = require('path');
 
-/** 外包 / 人力 / 派遣 / 猎头 类公司 —— 按公司名排除 */
-const OUTSOURCE_COMPANY = /人力|人才|劳务|外服|派遣|外包|企业管理|万宝盛华|人瑞|人惠|中智|仁联|科锐|高凡|拓保|博才|易才|朗钧|外企德科|FESCO|佰钧成|中科铭天|腾信软创|网新|赛意|华立数字|中软国际|软通动力|中电金信|文思海辉|博彦|法本|同海科技|同方鼎欣|中科软|众合|贸易商行|商行|人力资源/i;
+const CFG_PATH = path.resolve(__dirname, '..', 'filters.json');
 
-/** 非开发岗 / 级别严重不符 —— 按职位名排除 */
-const NON_DEV_TITLE = /测试|运维|实施|产品经理|销售|运营|讲师|UI设计|视觉设计|硬件|结构|电气|机械|采购|财务|编辑|设计师|实习|应届|校招|初级|前台|客服/i;
+let cfg = {};
+try {
+  cfg = JSON.parse(fs.readFileSync(CFG_PATH, 'utf8'));
+} catch (e) {
+  throw new Error(`读不到筛选规则 ${CFG_PATH}：${e.message}`);
+}
 
-/** 华为系社招基本是 OD 外包，单独处理（要匹配公司名开头） */
-const HUAWEI_OD = /^华为|华为技术|华为云/;
+/** 把配置里的字符串数组编译成正则数组 */
+const compile = (arr) => (arr || []).map(p => new RegExp(p, 'i'));
+
+const companyPatterns = compile(cfg.excludeCompany);
+const companyStrictPatterns = compile(cfg.excludeCompanyStrict);
+const companyOddPatterns = compile(cfg.excludeCompanyOdd);
+const titlePatterns = compile(cfg.excludeTitle);
+const devTitleRe = new RegExp(cfg.devTitleHint || '.', 'i');
+const ONSITE_NEG = new RegExp(cfg.onsiteNegation || '$^');
+const ONSITE = new RegExp(cfg.onsiteKeyword || '驻场');
+
+/** 兼容旧用法：一个能直接 .test(company) 的大正则 */
+const OUTSOURCE_COMPANY = new RegExp((cfg.excludeCompany || []).join('|'), 'i');
+
+/** 兼容旧用法：一个能直接 .test(title) 的大正则 */
+const NON_DEV_TITLE = new RegExp((cfg.excludeTitle || []).join('|'), 'i');
 
 /**
  * JD 层面的驻场检测。
@@ -27,9 +46,8 @@ const HUAWEI_OD = /^华为|华为技术|华为云/;
  * @returns {string[]} 命中的信号词
  */
 function outsourceSignal(jdText) {
-  const NEG = /(无需|不需要|不用|非|不)驻场|自研非外包|非外包|无外包|不是外包|不涉及外包/;
   const hits = [];
-  if (/驻场/.test(jdText) && !NEG.test(jdText)) hits.push('驻场');
+  if (ONSITE.test(jdText) && !ONSITE_NEG.test(jdText)) hits.push(cfg.onsiteKeyword || '驻场');
   return hits;
 }
 
@@ -41,10 +59,14 @@ function outsourceSignal(jdText) {
  * @returns {string|null}  跳过原因；null 表示可以投
  */
 function skipReason(title, company) {
-  if (!title) return '无标题';
-  if (NON_DEV_TITLE.test(title)) return '标题不像开发岗';
-  if (HUAWEI_OD.test(company || '')) return '华为系（社招基本是 OD 外包）';
-  if (OUTSOURCE_COMPANY.test(company || '')) return `公司名命中外包黑名单（${company}）`;
+  const t = title || '';
+  const c = company || '';
+  if (!t) return '无标题';
+  if (!devTitleRe.test(t)) return '不是开发岗';
+  for (const p of titlePatterns) if (p.test(t)) return `标题命中排除规则（${p.source}）`;
+  for (const p of companyStrictPatterns) if (p.test(c)) return `公司命中严格黑名单（${p.source}）`;
+  for (const p of companyPatterns) if (p.test(c)) return `公司名命中外包黑名单（${c}）`;
+  for (const p of companyOddPatterns) if (p.test(c)) return `非软件行业挂 IT 岗（${p.source}）`;
   return null;
 }
 
@@ -79,9 +101,10 @@ function parseSalary(raw) {
 }
 
 module.exports = {
+  config: cfg,
+  configPath: CFG_PATH,
   OUTSOURCE_COMPANY,
   NON_DEV_TITLE,
-  HUAWEI_OD,
   outsourceSignal,
   skipReason,
   parseSalary,

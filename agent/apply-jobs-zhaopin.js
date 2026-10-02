@@ -25,7 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
-const DATA = 'C:\\D\\agent\\find-job\\data';
+const DATA = path.resolve(__dirname, '..', 'data');   // 跟着项目走，不写死绝对路径
 const RESULTS = path.join(DATA, 'apply-results-zhaopin.json');
 const LOG = path.join(DATA, 'apply-log-zhaopin.txt');
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 投递流水线 —— 逐个职位：进详情 → 读JD+真实薪资 → 定制话术 → 投递 → 发招呼语
  *
  * 用法:
@@ -15,16 +15,16 @@
  *   data/apply-log.txt       人类可读的投递日志
  *
  * 变更说明（修掉的坑）:
- *   - 原来读 C:\D\agent\find-job\gd-jobs-ranked.json（不存在），改为 data/jobs-queue.json
- *   - 原来每轮 覆盖 apply-results.json，丢失历史 → 改为只追加 + URL 去重
- *   - 原来只按标题正则过滤，外包/人力公司会漏进 → 改为公司黑名单 + 薪资闸门
- *   - 原来不检查是否已投过 → 改为详情页出现「继续沟通」即跳过
+ *   - 读 data/jobs-queue.json（不是仓库根目录的旧文件名）
+ *   - 每轮只追加结果、按 URL 去重，不覆盖历史
+ *   - 公司黑名单 + 薪资闸门，外包/人力公司不会漏进来
+ *   - 详情页出现「继续沟通」即跳过（会话列表不可靠，见 docs/SCREENING.md）
  */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = 'C:\\D\\agent\\find-job';
+const ROOT = path.resolve(__dirname, '..');   // 跟着项目走，不写死绝对路径
 const DATA = path.join(ROOT, 'data');
 const QUEUE = path.join(DATA, 'jobs-queue.json');
 const RESULTS = path.join(DATA, 'apply-results.json');
