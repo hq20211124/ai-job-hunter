@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
   "name": "NavAgent",
-  "version": "0.1.0",
-  "description": "MCP browser navigation bridge. Pair with navagent-mcp (npm) to let your AI assistant control your browser.",
-  "author": "dimitri.bouriez.dev@gmail.com",
+  "version": "0.2.0",
+  "description": "用浏览器扩展驱动你自己登录的 Chrome —— 无需 CDP / Playwright，共享真实登录态。基于 navagent-mcp 改造。",
+  "author": "基于 DimitriBouriez/navagent-mcp 改造（dimitri.bouriez.dev@gmail.com）",
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",
     "128": "icon128.png"
   },
-  "permissions": ["activeTab", "alarms", "storage"],
+  "permissions": ["activeTab", "alarms", "storage", "<all_urls>"],
+  "host_permissions": ["<all_urls>"],
   "options_page": "options.html",
   "background": {
     "service_worker": "background.js"
