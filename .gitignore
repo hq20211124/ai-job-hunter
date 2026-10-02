@@ -23,8 +23,21 @@ resume/*.docx
 .edge-auto/
 .tmp/
 
+# ⚠️ 非本项目的本地内容 —— 含 API 密钥，绝不能提交
+skills/
+.clawhub/
+
+# 密钥与凭据（任何情况下都不要提交）
+*.key
+*api-keys*.json
+**/config/api-keys.json
+.env
+.env.*
+
 # 编辑器 / 系统
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+__pycache__/
+*.pyc
