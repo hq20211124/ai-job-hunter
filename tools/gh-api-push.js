@@ -119,6 +119,21 @@ async function updateRef(sha, base) {
   console.log(`\n✅ 完成: https://github.com/${OWNER}/${NAME}`);
 }
 
+/**
+ * 空仓库需要先有一个提交，Git Data API（blobs/trees/commits）才能用。
+ * 这里用 Contents API 建一个占位提交作为基底。
+ */
+async function bootstrapEmptyRepo() {
+  console.log('  仓库为空 —— 先用 Contents API 建一个基底提交…');
+  const res = await api('PUT', `/repos/${OWNER}/${NAME}/contents/.gitignore`, {
+    message: 'chore: 初始化仓库',
+    content: Buffer.from('# 由 tools/gh-api-push.js 初始化\n').toString('base64'),
+  });
+  const sha = res.commit.sha;
+  console.log(`  基底提交 ${sha.slice(0, 8)}\n`);
+  return sha;
+}
+
 (async () => {
   console.log(`目标: ${REPO}   分支: ${BRANCH}\n`);
 
@@ -128,10 +143,11 @@ async function updateRef(sha, base) {
     remoteHead = ref.object.sha;
     console.log(`远端已有分支，HEAD = ${remoteHead.slice(0, 8)}\n`);
   } catch {
-    console.log('远端分支不存在（空仓库）\n');
+    console.log('远端分支不存在');
+    remoteHead = await bootstrapEmptyRepo();
   }
 
-  if (SQUASH || remoteHead) {
+  if (SQUASH || (remoteHead && remoteHead !== null && process.argv.includes('--append'))) {
     const files = localFiles();
     const contents = {};
     for (const f of files) contents[f] = fs.readFileSync(path.join(ROOT, f));
@@ -157,9 +173,11 @@ async function updateRef(sha, base) {
     const files = filesAtCommit(c);
     const contents = {};
     for (const f of files) contents[f] = readAtCommit(c, f);
-    const parents = gitText(`log -1 --format=%P ${c}`)
+    let parents = gitText(`log -1 --format=%P ${c}`)
       .trim().split(/\s+/).filter(Boolean)
       .map((p) => shaMap.get(p)).filter(Boolean);
+    // 第一个本地提交没有父提交 → 挂到基底提交上（若存在）
+    if (!parents.length && remoteHead) parents = [remoteHead];
     const sha = await pushOne({
       files, contents,
       message: commitMessage(c),
