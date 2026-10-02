@@ -1,8 +1,14 @@
 # AI 求职自动化 —— 浏览器扩展方案
 
+[中文](README.md) | **English** → [`README.en.md`](README.en.md)
+
 用 AI 代替人操作招聘网站：看职位、读 JD、投简历、和 HR 聊天。
 
 **核心思路：不启动新浏览器、不用 CDP、不复制用户配置，而是装一个浏览器扩展，在你**真实登录的 Chrome** 里干活。**
+
+> 📖 **第一次用？请看保姆级教程：[`docs/TUTORIAL.md`](docs/TUTORIAL.md)**
+>
+> 从装 Node.js 开始，一步步带你装扩展、起代理、抓岗位、筛选、投递，并教你配合 AI 助手使用。**读完就能上手。**
 
 ---
 
@@ -20,6 +26,10 @@
 ---
 
 ## 架构
+
+![架构图](docs/architecture.svg)
+
+下面同一张图的文字版（方便复制到别处）：
 
 ```
 ┌─────────────────┐   chrome.tabs.sendMessage   ┌──────────────────┐
@@ -43,6 +53,8 @@
 ---
 
 ## 快速开始
+
+> 想看详细的分步教程（含截图说明、排错清单、AI 助手配合用法），请直接看 **[`docs/TUTORIAL.md`](docs/TUTORIAL.md)**。下面是精简版。
 
 ### 1. 装扩展
 
@@ -200,6 +212,22 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 
 ---
 
+## 配合 AI 助手使用
+
+**这套工具本身只是「手和眼睛」** —— 它能打开网页、读内容、点按钮，但**不理解内容**。
+
+真正让它有价值的是配合 AI 助手（DeepSeek Harness、Claude Code、Cursor 等能执行命令的助手）：你把需求告诉它，它来读 JD、写招呼语、分析 HR 回复、按需改脚本。
+
+完整的开场提示词、对话示例和三条红线，见教程的 [进阶章节](docs/TUTORIAL.md#进阶配合-ai-助手一起用)。
+
+**三条红线：**
+
+1. **不让 AI 编造经历** —— 它写得很漂亮，但必须是你真做过的事
+2. **不让 AI 写没依据的数字** —— "提升 40%" 面试一问就穿帮
+3. **涉及承诺的事你拍板** —— 面试时间、期望薪资、到岗时间，AI 起草，你确认
+
+---
+
 ## 目录结构
 
 ```
@@ -218,10 +246,27 @@ const title = await pe('document.title');    // 页面主世界执行 JS
 │   ├── scrape-jobs.js      岗位抓取
 │   ├── apply-jobs.js       投递流水线（含按 JD 定制招呼语）
 │   └── rank-jobs.py        岗位过滤 + 匹配度打分
-├── data/               岗位数据
-├── research/           相关开源项目调研
-└── resume/             简历与生成脚本
+├── resume/             简历生成（个人信息放在 gitignore 的 profile.json）
+│   ├── build_resume.py     从 profile.json 生成 Word 简历
+│   └── profile.example.json  模板
+├── docs/
+│   ├── TUTORIAL.md         保姆级教程
+│   └── architecture.svg
+└── data/               岗位数据（已 gitignore）
 ```
+
+---
+
+## 端口与环境变量
+
+| 变量 | 默认 | 作用 |
+|---|---|---|
+| `NAVAGENT_HOST` | `127.0.0.1` | 代理地址（脚本侧） |
+| `NAVAGENT_HTTP_PORT` | `61823` | **脚本下命令**的 HTTP 端口 |
+| `NAVAGENT_PORT` | `61822` | **扩展连接**的 WebSocket 端口 |
+
+> ⚠️ 这两个端口是独立的，别搞混：61822 是「扩展 → 代理」，61823 是「你 → 代理」。
+> 改 WebSocket 端口时，扩展选项页里的端口也要同步改。
 
 ---
 
